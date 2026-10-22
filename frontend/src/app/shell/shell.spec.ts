@@ -11,8 +11,8 @@ describe('Shell', () => {
   let fixture: ComponentFixture<Shell>;
   let page: HTMLElement;
 
-  async function openAs(role: Role, name: string): Promise<void> {
-    const session = signal({ token: 't', role, flatId: null, name, societyCode: 'sunrise' });
+  async function openAs(role: Role, name: string, flatId: string | null = null): Promise<void> {
+    const session = signal({ token: 't', role, flatId, name, societyCode: 'sunrise' });
     await TestBed.configureTestingModule({
       imports: [Shell],
       providers: [provideRouter([]), { provide: AuthService, useValue: { session, role: signal(role), logout } }],
@@ -47,6 +47,18 @@ describe('Shell', () => {
     await openAs('COMMITTEE', 'Anil C');
 
     expect(links()).toEqual(['Dashboard', 'Flats']);
+  });
+
+  it('gives a treasurer who owns a flat a Home to pay their own dues', async () => {
+    await openAs('TREASURER', 'Meena T', 'f201');
+
+    expect(links()).toEqual(['Home', 'Dashboard', 'Record', 'Flats']);
+  });
+
+  it('gives a committee member who owns a flat a Home to pay their own dues', async () => {
+    await openAs('COMMITTEE', 'Anil C', 'f202');
+
+    expect(links()).toEqual(['Home', 'Dashboard', 'Flats']);
   });
 
   it('shows who is logged in', async () => {

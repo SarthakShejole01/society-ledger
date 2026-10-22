@@ -47,13 +47,14 @@ export class Shell {
 
   protected readonly name = computed(() => this.auth.session()?.name ?? '');
   protected readonly links = computed<NavLink[]>(() => {
+    const home: NavLink[] = this.auth.session()?.flatId ? [{ path: '/home', label: 'Home' }] : [];
     switch (this.auth.role()) {
       case 'OWNER':
         return [{ path: '/home', label: 'Home' }, { path: '/flats', label: 'Flats' }];
       case 'TREASURER':
-        return [{ path: '/dashboard', label: 'Dashboard' }, { path: '/record', label: 'Record' }, { path: '/flats', label: 'Flats' }];
+        return [...home, { path: '/dashboard', label: 'Dashboard' }, { path: '/record', label: 'Record' }, { path: '/flats', label: 'Flats' }];
       default:
-        return [{ path: '/dashboard', label: 'Dashboard' }, { path: '/flats', label: 'Flats' }];
+        return [...home, { path: '/dashboard', label: 'Dashboard' }, { path: '/flats', label: 'Flats' }];
     }
   });
 
