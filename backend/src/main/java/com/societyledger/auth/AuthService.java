@@ -98,7 +98,7 @@ public class AuthService {
 			otps.markUsed(challenge.get().id());
 			String token = societyId + "." + randomToken();
 			sessions.insert(hasher.hash(token), societyId, member.get().id(), now, now.plus(SESSION_LIFETIME));
-			Principal principal = new Principal(member.get().id(), societyId, member.get().flatId(), member.get().role());
+			Principal principal = new Principal(member.get().id(), societyId, member.get().flatId(), member.get().role(), member.get().name());
 			return Optional.of(new AuthSession(token, principal));
 		});
 		return session.orElseThrow(InvalidOtpException::new);
