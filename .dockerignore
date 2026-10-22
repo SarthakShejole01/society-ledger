@@ -1,0 +1,12 @@
+.git
+.github
+**/node_modules
+**/dist
+**/build
+**/.gradle
+**/.angular
+backend/src/main/resources/static
+docs
+*.md
+.env
+.env.*

@@ -12,3 +12,6 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Built frontend copied in for packaging (see Dockerfile)
+backend/src/main/resources/static/
