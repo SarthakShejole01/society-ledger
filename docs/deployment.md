@@ -63,10 +63,15 @@ Checked by running it:
 - The society loader with a good sheet, a bad mobile number, a repeated society, a repeated flat and a repeated mobile.
 - Frontend install, tests and production build from a clean copy using the committed lockfile.
 
-Not checked, because this machine has no Docker and no access to GitHub Actions:
+Checked by the first CI run on GitHub (all three jobs passed on the commit that added the workflow):
 
-- The Docker image build and `docker compose up`.
-- The CI workflow itself, including the database tests running on Testcontainers. Watch its first run closely.
+- The backend tests, including the database tests, which there start a real PostgreSQL with Testcontainers.
+- The frontend install from the lockfile, the tests and the production build.
+- The Dockerfile builds the image. It was built, not run.
+
+Not checked:
+
+- Running the container, and `docker compose up`. CI only builds the image.
 - Real email through a real provider.
 - HTTPS, the host's health checks and any real hosting platform.
 
