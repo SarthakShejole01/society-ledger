@@ -6,6 +6,7 @@ import com.societyledger.payment.AlreadyPaidException;
 import com.societyledger.payment.AmountMismatchException;
 import com.societyledger.payment.FlatNotFoundException;
 import com.societyledger.payment.GatewayReferenceReusedException;
+import com.societyledger.payment.WaiverReasonRequiredException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -24,6 +25,11 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(TooManyOtpRequestsException.class)
 	ProblemDetail tooManyOtpRequests(TooManyOtpRequestsException e) {
 		return problem(HttpStatus.TOO_MANY_REQUESTS, e.getMessage());
+	}
+
+	@ExceptionHandler(WaiverReasonRequiredException.class)
+	ProblemDetail waiverReasonRequired(WaiverReasonRequiredException e) {
+		return problem(HttpStatus.BAD_REQUEST, e.getMessage());
 	}
 
 	@ExceptionHandler(ForbiddenException.class)

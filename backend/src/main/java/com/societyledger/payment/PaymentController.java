@@ -21,13 +21,35 @@ class PaymentController {
 	record StartRequest(@NotNull UUID flatId, @NotNull YearMonth month) {
 	}
 
+	record OfflineRequest(@NotNull UUID flatId, @NotNull YearMonth month, @NotNull OfflineMethod method,
+			String reference, boolean waiveLateFee, String waiverReason) {
+	}
+
+	record OfflineResponse(UUID paymentId, long totalPaise, long lateFeePaise, long waivedPaise) {
+	}
+
 	record IntentResponse(UUID paymentId, UUID flatId, String month, long totalPaise, long lateFeePaise) {
 	}
 
 	private final PaymentService payments;
+	private final OfflinePaymentService offline;
 
-	PaymentController(PaymentService payments) {
+	PaymentController(PaymentService payments, OfflinePaymentService offline) {
 		this.payments = payments;
+		this.offline = offline;
+	}
+
+	/** Cash or cheque received by the treasurer. Only the treasurer can record one. */
+	@PostMapping("/api/payments/offline")
+	@ResponseStatus(HttpStatus.CREATED)
+	OfflineResponse recordOffline(@AuthenticatedPrincipal Principal who, @Valid @RequestBody OfflineRequest request) {
+		if (who.role() != Role.TREASURER) {
+			throw new ForbiddenException();
+		}
+		OfflinePaymentResult result = offline.record(who.societyId(), who.memberId(), who.name(),
+				new OfflinePaymentCommand(request.flatId(), request.month(), request.method(), request.reference(),
+						request.waiveLateFee(), request.waiverReason()));
+		return new OfflineResponse(result.paymentId(), result.total().paise(), result.lateFee().paise(), result.waived().paise());
 	}
 
 	@PostMapping("/api/payments")

@@ -17,14 +17,22 @@ import com.societyledger.auth.InvalidOtpException;
 import com.societyledger.auth.Principal;
 import com.societyledger.auth.Role;
 import com.societyledger.auth.TooManyOtpRequestsException;
+import com.societyledger.billing.Dashboard;
+import com.societyledger.billing.DashboardService;
 import com.societyledger.billing.Dues;
 import com.societyledger.billing.DuesService;
 import com.societyledger.billing.FlatStatus;
+import com.societyledger.billing.PendingFlat;
 import com.societyledger.billing.StatusBoardService;
 import com.societyledger.common.Money;
 import com.societyledger.payment.AlreadyPaidException;
+import com.societyledger.payment.OfflineMethod;
+import com.societyledger.payment.OfflinePaymentCommand;
+import com.societyledger.payment.OfflinePaymentResult;
+import com.societyledger.payment.OfflinePaymentService;
 import com.societyledger.payment.PaymentIntent;
 import com.societyledger.payment.PaymentService;
+import com.societyledger.payment.WaiverReasonRequiredException;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +67,10 @@ class ApiContractTest {
 	private StatusBoardService board;
 	@MockitoBean
 	private PaymentService payments;
+	@MockitoBean
+	private OfflinePaymentService offline;
+	@MockitoBean
+	private DashboardService dashboard;
 
 	@BeforeEach
 	void knownSessions() {
@@ -254,5 +266,89 @@ class ApiContractTest {
 				.header("Authorization", "Bearer owner-token")
 				.content("{\"flatId\":\"" + OWN_FLAT + "\",\"month\":\"2026-13\"}"))
 				.andExpect(status().isBadRequest());
+	}
+
+	// --- treasurer tools ---
+
+	private static final String OFFLINE_BODY = "{\"flatId\":\"%s\",\"month\":\"2026-10\",\"method\":\"CHEQUE\",\"reference\":\"000123\","
+			+ "\"waiveLateFee\":true,\"waiverReason\":\"Owner was in hospital\"}";
+
+	@Test
+	void a_treasurer_can_record_a_cheque_with_a_waiver() throws Exception {
+		UUID paymentId = UUID.randomUUID();
+		given(offline.record(eq(SOCIETY), eq(TREASURER.memberId()), eq("Meena T"),
+				eq(new OfflinePaymentCommand(OWN_FLAT, OCTOBER, OfflineMethod.CHEQUE, "000123", true, "Owner was in hospital"))))
+				.willReturn(new OfflinePaymentResult(paymentId, Money.rupees(1500), Money.ZERO, Money.rupees(100)));
+
+		mvc.perform(post("/api/payments/offline").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer treasurer-token")
+				.content(OFFLINE_BODY.formatted(OWN_FLAT)))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.paymentId").value(paymentId.toString()))
+				.andExpect(jsonPath("$.totalPaise").value(150000))
+				.andExpect(jsonPath("$.waivedPaise").value(10000));
+	}
+
+	@Test
+	void an_owner_cannot_record_an_offline_payment() throws Exception {
+		mvc.perform(post("/api/payments/offline").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer owner-token")
+				.content(OFFLINE_BODY.formatted(OWN_FLAT)))
+				.andExpect(status().isForbidden());
+
+		verify(offline, never()).record(any(), any(), any(), any());
+	}
+
+	@Test
+	void a_committee_member_cannot_record_an_offline_payment() throws Exception {
+		mvc.perform(post("/api/payments/offline").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer committee-token")
+				.content(OFFLINE_BODY.formatted(OWN_FLAT)))
+				.andExpect(status().isForbidden());
+
+		verify(offline, never()).record(any(), any(), any(), any());
+	}
+
+	@Test
+	void waiving_without_a_reason_answers_400() throws Exception {
+		given(offline.record(any(), any(), any(), any())).willThrow(new WaiverReasonRequiredException());
+
+		mvc.perform(post("/api/payments/offline").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer treasurer-token")
+				.content(OFFLINE_BODY.formatted(OWN_FLAT)))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	@Test
+	void an_unknown_payment_method_answers_400() throws Exception {
+		mvc.perform(post("/api/payments/offline").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer treasurer-token")
+				.content("{\"flatId\":\"" + OWN_FLAT + "\",\"month\":\"2026-10\",\"method\":\"BITCOIN\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void the_treasurer_and_committee_see_the_dashboard_and_owners_do_not() throws Exception {
+		given(dashboard.forMonth(SOCIETY, OCTOBER)).willReturn(new Dashboard(OCTOBER, 45, 31, 14, Money.rupees(70000),
+				Money.rupees(50000), Money.rupees(30000), Money.rupees(20000), Money.rupees(400), Money.rupees(100),
+				List.of(new PendingFlat("305", 3, Money.rupees(1600)))));
+
+		mvc.perform(get("/api/dashboard").param("month", "2026-10").header("Authorization", "Bearer treasurer-token"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.flatCount").value(45))
+				.andExpect(jsonPath("$.paidCount").value(31))
+				.andExpect(jsonPath("$.expectedPaise").value(7000000))
+				.andExpect(jsonPath("$.collectedPaise").value(5000000))
+				.andExpect(jsonPath("$.onlineCollectedPaise").value(3000000))
+				.andExpect(jsonPath("$.offlineCollectedPaise").value(2000000))
+				.andExpect(jsonPath("$.lateFeesWaivedPaise").value(10000))
+				.andExpect(jsonPath("$.pending[0].number").value("305"))
+				.andExpect(jsonPath("$.pending[0].dueNowPaise").value(160000));
+
+		mvc.perform(get("/api/dashboard").param("month", "2026-10").header("Authorization", "Bearer committee-token"))
+				.andExpect(status().isOk());
+		mvc.perform(get("/api/dashboard").param("month", "2026-10").header("Authorization", "Bearer owner-token"))
+				.andExpect(status().isForbidden());
 	}
 }

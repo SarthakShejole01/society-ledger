@@ -55,5 +55,7 @@ Create the `ledger_app` role (login, no table ownership) before the first start.
 | `GET /api/flats/{flatId}/dues?month=2026-10` | an owner for their own flat; treasurer and committee for any flat |
 | `GET /api/flats/status?month=2026-10` | every member, status only |
 | `POST /api/payments` | owner or treasurer, for any flat; the server sets the amount |
+| `POST /api/payments/offline` | treasurer only: record cash or cheque, optionally waiving the late fee with a reason |
+| `GET /api/dashboard?month=2026-10` | treasurer and committee: counts, expected and collected, online against offline, late fees, pending flats |
 
 All paths except `/api/auth/**` need `Authorization: Bearer <token>`. Errors are RFC 7807 problems.
