@@ -10,6 +10,8 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -18,6 +20,16 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class AuthService {
+
+	private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
+	/** A code to deliver once it has been saved: where to send it and what to send. */
+	private record Delivery(String email, String code) {
+	}
+
+	/** What happened when a code was asked for, worked out inside the society scope. */
+	private record Requested(boolean tooMany, Delivery delivery) {
+	}
 
 	private static final Duration CODE_LIFETIME = Duration.ofMinutes(10);
 	private static final Duration REQUEST_WINDOW = Duration.ofMinutes(10);
@@ -32,12 +44,14 @@ public class AuthService {
 	private final SessionRepository sessions;
 	private final OtpCodeGenerator codes;
 	private final OtpSender sender;
+	private final OtpDispatcher dispatcher;
 	private final SecretHasher hasher;
 	private final Clock clock;
 	private final SecureRandom random = new SecureRandom();
 
 	public AuthService(SocietyScope scope, SocietyDirectory societies, MemberRepository members, OtpRepository otps,
-			SessionRepository sessions, OtpCodeGenerator codes, OtpSender sender, SecretHasher hasher, Clock clock) {
+			SessionRepository sessions, OtpCodeGenerator codes, OtpSender sender, OtpDispatcher dispatcher,
+			SecretHasher hasher, Clock clock) {
 		this.scope = scope;
 		this.societies = societies;
 		this.members = members;
@@ -45,6 +59,7 @@ public class AuthService {
 		this.sessions = sessions;
 		this.codes = codes;
 		this.sender = sender;
+		this.dispatcher = dispatcher;
 		this.hasher = hasher;
 		this.clock = clock;
 	}
@@ -55,23 +70,36 @@ public class AuthService {
 		if (societyId.isEmpty()) {
 			return;
 		}
-		boolean tooMany = scope.inSociety(societyId.get(), () -> {
+		Requested requested = scope.inSociety(societyId.get(), () -> {
 			Optional<MemberRepository.Member> member = members.findByMobile(mobile);
 			if (member.isEmpty()) {
-				return false;
+				return new Requested(false, null);
 			}
 			Instant now = Instant.now(clock);
 			if (otps.countRequestsSince(member.get().id(), now.minus(REQUEST_WINDOW)) >= MAX_REQUESTS_IN_WINDOW) {
-				return true;
+				return new Requested(true, null);
 			}
 			otps.invalidateActive(member.get().id());
 			String code = codes.next();
 			otps.insert(societyId.get(), member.get().id(), codeHash(member.get().id(), code), now, now.plus(CODE_LIFETIME));
-			sender.send(member.get().email(), code);
-			return false;
+			return new Requested(false, new Delivery(member.get().email(), code));
 		});
-		if (tooMany) {
+		if (requested.tooMany()) {
 			throw new TooManyOtpRequestsException();
+		}
+		if (requested.delivery() != null) {
+			// After the code is saved, and away from the request: a slow or failing mail server must not
+			// show whether a number is registered.
+			dispatcher.dispatch(() -> deliver(requested.delivery()));
+		}
+	}
+
+	private void deliver(Delivery delivery) {
+		try {
+			sender.send(delivery.email(), delivery.code());
+		}
+		catch (RuntimeException e) {
+			log.warn("Could not deliver a one-time code ({})", e.getClass().getSimpleName());
 		}
 	}
 

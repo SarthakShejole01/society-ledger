@@ -64,6 +64,25 @@ class AuthServiceTest {
 	}
 
 	@Test
+	void a_failing_mail_server_does_not_change_the_answer() {
+		sender.failWith(new IllegalStateException("smtp is down"));
+
+		auth.requestOtp("sunrise", MOBILE);
+
+		assertThat(admin.queryForObject("select count(*) from otp_challenges", Integer.class)).isEqualTo(1);
+	}
+
+	@Test
+	void the_code_is_sent_only_after_it_has_been_saved() {
+		java.util.concurrent.atomic.AtomicInteger savedWhenSent = new java.util.concurrent.atomic.AtomicInteger(-1);
+		sender.beforeSend(() -> savedWhenSent.set(admin.queryForObject("select count(*) from otp_challenges", Integer.class)));
+
+		auth.requestOtp("sunrise", MOBILE);
+
+		assertThat(savedWhenSent.get()).isEqualTo(1);
+	}
+
+	@Test
 	void the_code_is_not_stored_in_plain_text() {
 		auth.requestOtp("sunrise", MOBILE);
 

@@ -11,9 +11,17 @@ public class RecordingOtpSender implements OtpSender {
 	}
 
 	private final List<Sent> sent = new ArrayList<>();
+	private RuntimeException failure;
+	private Runnable beforeSend;
 
 	@Override
 	public synchronized void send(String email, String code) {
+		if (beforeSend != null) {
+			beforeSend.run();
+		}
+		if (failure != null) {
+			throw failure;
+		}
 		sent.add(new Sent(email, code));
 	}
 
@@ -21,7 +29,19 @@ public class RecordingOtpSender implements OtpSender {
 		return List.copyOf(sent);
 	}
 
+	/** Makes every send fail, like a mail server that is down. */
+	public synchronized void failWith(RuntimeException failure) {
+		this.failure = failure;
+	}
+
+	/** Runs something at the moment of sending, to look at what exists by then. */
+	public synchronized void beforeSend(Runnable action) {
+		this.beforeSend = action;
+	}
+
 	public synchronized void clear() {
 		sent.clear();
+		failure = null;
+		beforeSend = null;
 	}
 }
