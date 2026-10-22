@@ -44,7 +44,25 @@ export SOCIETY_LEDGER_AUTH_SECRET=<a long random string>
 cd backend && ./gradlew bootRun
 ```
 
-The `dev` profile logs one-time codes instead of emailing them. Never enable it for real members.
+The `dev` profile logs one-time codes instead of emailing them, but only while email is switched off.
+Never enable it for real members.
+
+### Sending real email
+
+```
+export SOCIETY_LEDGER_MAIL_ENABLED=true
+export SOCIETY_LEDGER_MAIL_FROM='Society Ledger <login@your-domain>'
+export SPRING_MAIL_HOST=<smtp host>
+export SPRING_MAIL_PORT=587
+export SPRING_MAIL_USERNAME=<smtp user>
+export SPRING_MAIL_PASSWORD=<smtp password or app password>
+```
+
+Connections use STARTTLS and are authenticated, with 5 to 10 second timeouts. Sending happens in the
+background after the code is saved, so a slow or failing mail server never changes what the caller sees.
+If email is neither enabled nor in the `dev` profile, the application refuses to start, which is deliberate.
+Use a sender address on a domain you control and set up SPF and DKIM for it, or codes may land in spam.
+An email outage does not mark the application unhealthy: logins are delayed, everything else keeps working.
 Create the `ledger_app` role (login, no table ownership) before the first start.
 
 ## Run the frontend

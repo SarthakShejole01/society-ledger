@@ -1,0 +1,24 @@
+# Settings that are safe to commit. Secrets and addresses come from environment variables
+# (see the README): SPRING_DATASOURCE_*, SPRING_FLYWAY_*, SOCIETY_LEDGER_AUTH_SECRET and, to send real
+# email, SOCIETY_LEDGER_MAIL_ENABLED, SOCIETY_LEDGER_MAIL_FROM, SPRING_MAIL_*.
+society-ledger:
+  mail:
+    enabled: false
+
+spring:
+  mail:
+    properties:
+      # Encrypted, authenticated and never left waiting for a slow server.
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
+      mail.smtp.starttls.required: true
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
+
+management:
+  health:
+    # An email outage must not make the whole application look broken to the hosting platform.
+    # Logins degrade (codes are delayed) but payments, dashboards and the board keep working.
+    mail:
+      enabled: false
