@@ -71,4 +71,6 @@ install bug seen with npm 10.
 | `POST /api/payments/offline` | treasurer only: record cash or cheque, optionally waiving the late fee with a reason |
 | `GET /api/dashboard?month=2026-10` | treasurer and committee: counts, expected and collected, online against offline, late fees, pending flats |
 
+The dashboard also returns each pending flat's id and amount so the treasurer's screen can record a payment.
+
 All paths except `/api/auth/**` need `Authorization: Bearer <token>`. Errors are RFC 7807 problems.
