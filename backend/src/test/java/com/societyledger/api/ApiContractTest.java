@@ -56,6 +56,7 @@ class ApiContractTest {
 	private static final Principal OWNER = new Principal(UUID.randomUUID(), SOCIETY, OWN_FLAT, Role.OWNER, "Rajesh K");
 	private static final Principal TREASURER = new Principal(UUID.randomUUID(), SOCIETY, null, Role.TREASURER, "Meena T");
 	private static final Principal COMMITTEE = new Principal(UUID.randomUUID(), SOCIETY, null, Role.COMMITTEE, "Anil C");
+	private static final Principal COMMITTEE_WITH_FLAT = new Principal(UUID.randomUUID(), SOCIETY, OWN_FLAT, Role.COMMITTEE, "Anil C");
 
 	@Autowired
 	private MockMvc mvc;
@@ -77,6 +78,7 @@ class ApiContractTest {
 		given(auth.authenticate("owner-token")).willReturn(Optional.of(OWNER));
 		given(auth.authenticate("treasurer-token")).willReturn(Optional.of(TREASURER));
 		given(auth.authenticate("committee-token")).willReturn(Optional.of(COMMITTEE));
+		given(auth.authenticate("committee-flat-token")).willReturn(Optional.of(COMMITTEE_WITH_FLAT));
 		given(auth.authenticate("unknown-token")).willReturn(Optional.empty());
 	}
 
@@ -245,6 +247,27 @@ class ApiContractTest {
 		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
 				.header("Authorization", "Bearer committee-token")
 				.content("{\"flatId\":\"" + OWN_FLAT + "\",\"month\":\"2026-10\"}"))
+				.andExpect(status().isForbidden());
+
+		verify(payments, never()).start(any(), any(), any(), any());
+	}
+
+	@Test
+	void a_committee_member_can_pay_their_own_flat() throws Exception {
+		given(payments.start(SOCIETY, OWN_FLAT, OCTOBER, "Anil C")).willReturn(
+				new PaymentIntent(UUID.randomUUID(), OWN_FLAT, OCTOBER, Money.rupees(1500), Money.ZERO));
+
+		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer committee-flat-token")
+				.content("{\"flatId\":\"" + OWN_FLAT + "\",\"month\":\"2026-10\"}"))
+				.andExpect(status().isCreated());
+	}
+
+	@Test
+	void a_committee_member_cannot_pay_for_someone_elses_flat() throws Exception {
+		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer committee-flat-token")
+				.content("{\"flatId\":\"" + OTHER_FLAT + "\",\"month\":\"2026-10\"}"))
 				.andExpect(status().isForbidden());
 
 		verify(payments, never()).start(any(), any(), any(), any());

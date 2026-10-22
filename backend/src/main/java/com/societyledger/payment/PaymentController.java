@@ -55,7 +55,8 @@ class PaymentController {
 	@PostMapping("/api/payments")
 	@ResponseStatus(HttpStatus.CREATED)
 	IntentResponse start(@AuthenticatedPrincipal Principal who, @Valid @RequestBody StartRequest request) {
-		if (who.role() == Role.COMMITTEE) {
+		// The committee is otherwise read-only, but a member who owns a flat may pay for their own.
+		if (who.role() == Role.COMMITTEE && !request.flatId().equals(who.flatId())) {
 			throw new ForbiddenException();
 		}
 		PaymentIntent intent = payments.start(who.societyId(), request.flatId(), request.month(), who.name());
