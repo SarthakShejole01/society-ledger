@@ -8,10 +8,13 @@ import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { NOW } from '../../core/clock';
 import { FlatStatus } from '../../core/models';
+import { PaymentFlow, PayOutcome } from '../../core/payment-flow';
 import { PayForAnother } from './pay-for-another';
 
 describe('PayForAnother', () => {
-  const api = { board: vi.fn(), startPayment: vi.fn() };
+  const api = { board: vi.fn() };
+  const flow = { pay: vi.fn() };
+  const intent = { paymentId: 'p1', flatId: 'f401', month: '2026-10', totalPaise: 130000, lateFeePaise: 10000, currency: 'INR', gatewayOrderId: 'o1', checkoutKey: 'k' };
   const session = signal({ token: 't', role: 'OWNER' as const, flatId: 'f304', name: 'Rajesh K', societyCode: 'sunrise' });
   let fixture: ComponentFixture<PayForAnother>;
   let page: HTMLElement;
@@ -29,6 +32,7 @@ describe('PayForAnother', () => {
       providers: [
         provideRouter([]),
         { provide: ApiService, useValue: api },
+        { provide: PaymentFlow, useValue: flow },
         { provide: AuthService, useValue: { session } },
         { provide: NOW, useValue: () => new Date('2026-10-20T10:00:00Z') },
         { provide: ActivatedRoute, useValue: { snapshot: { queryParamMap: convertToParamMap(flat ? { flat } : {}) } } },
@@ -124,48 +128,89 @@ describe('PayForAnother', () => {
     expect(page.textContent).toContain('Your name');
   });
 
-  it('starts a payment for the chosen flat and never sends an amount', async () => {
+  async function payWith(outcome: PayOutcome): Promise<void> {
+    flow.pay.mockResolvedValue(outcome);
+    press('Pay for this flat');
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('pays for the chosen flat with the owner as the payer', async () => {
     api.board.mockReturnValue(of(board));
-    api.startPayment.mockReturnValue(of({ paymentId: 'p1', flatId: 'f401', month: '2026-10', totalPaise: 130000, lateFeePaise: 10000 }));
     await open();
     choose('f401');
 
-    press('Start payment');
+    await payWith({ kind: 'paid', intent });
 
-    expect(api.startPayment).toHaveBeenCalledWith('f401', '2026-10');
-    expect(page.textContent).toContain('Payment started');
-    expect(page.textContent).toContain('Flat 401');
-    expect(page.textContent).toContain('₹1,300');
-    expect(page.textContent).toContain('late fee');
+    expect(flow.pay).toHaveBeenCalledWith('f401', '2026-10', 'Rajesh K');
   });
 
-  it('says plainly that the online payment page is not connected yet', async () => {
+  it('confirms the payment, names the flat, and no longer offers it', async () => {
+    api.board.mockReturnValueOnce(of(board));
+    await open();
+    choose('f401');
+    api.board.mockReturnValue(of(board.map((f) => (f.flatId === 'f401' ? { ...f, paid: true } : f))));
+
+    await payWith({ kind: 'paid', intent });
+
+    expect(page.textContent).toContain('Payment received');
+    expect(page.textContent).toContain('Flat 401');
+    expect(Array.from(page.querySelectorAll('#flat option')).map((o) => o.textContent?.trim())).not.toContain('Flat 401');
+  });
+
+  it('says nothing was charged when the payment page is closed', async () => {
     api.board.mockReturnValue(of(board));
-    api.startPayment.mockReturnValue(of({ paymentId: 'p1', flatId: 'f305', month: '2026-10', totalPaise: 120000, lateFeePaise: 0 }));
     await open();
 
-    press('Start payment');
+    await payWith({ kind: 'cancelled' });
 
-    expect(page.textContent).toContain('not connected yet');
+    expect(page.textContent).toContain('Payment cancelled');
+    expect(page.textContent).toContain('Nothing was charged');
+  });
+
+  it('says so when the payment page cannot be opened', async () => {
+    api.board.mockReturnValue(of(board));
+    await open();
+
+    await payWith({ kind: 'pageUnavailable' });
+
+    expect(page.textContent).toContain('could not open the payment page');
+  });
+
+  it('says so when the payment provider is down', async () => {
+    api.board.mockReturnValue(of(board));
+    await open();
+
+    await payWith({ kind: 'providerDown' });
+
+    expect(page.textContent).toContain('payment provider is not available');
   });
 
   it('explains when the flat turns out to be paid already', async () => {
     api.board.mockReturnValue(of(board));
-    api.startPayment.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409 })));
     await open();
 
-    press('Start payment');
+    await payWith({ kind: 'alreadyPaid' });
 
     expect(page.textContent).toContain('already paid');
   });
 
   it('shows a plain message when starting the payment fails', async () => {
     api.board.mockReturnValue(of(board));
-    api.startPayment.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
     await open();
 
-    press('Start payment');
+    await payWith({ kind: 'failed' });
 
     expect(page.textContent).toContain('could not start');
+  });
+
+  it('asks the payer to check again when money may have been taken but is not confirmed', async () => {
+    api.board.mockReturnValue(of(board));
+    await open();
+
+    await payWith({ kind: 'notConfirmed', intent });
+
+    expect(page.textContent).toContain('not confirmed yet');
+    expect(page.textContent).toContain('do not pay again');
   });
 });

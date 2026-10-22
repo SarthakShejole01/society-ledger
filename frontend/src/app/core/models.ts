@@ -38,6 +38,17 @@ export interface PaymentIntent {
   month: string;
   totalPaise: number;
   lateFeePaise: number;
+  currency: string;
+  gatewayOrderId: string;
+  /** The public key for the payment page. The value "fake" means a development simulation. */
+  checkoutKey: string;
+}
+
+/** What the payment page hands back after a payment. The server checks it; the browser never decides. */
+export interface CheckoutProof {
+  gatewayOrderId: string;
+  gatewayPaymentId: string;
+  signature: string;
 }
 
 /** A flat that has not paid. `dueNowPaise` includes any late fee that applies today. */

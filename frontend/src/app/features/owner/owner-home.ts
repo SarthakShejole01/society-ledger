@@ -1,4 +1,3 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
@@ -7,9 +6,16 @@ import { NOW } from '../../core/clock';
 import { LoadState } from '../../core/load-state';
 import { formatRupees } from '../../core/money';
 import { monthLabel, monthOf } from '../../core/month';
-import { Dues, PaymentIntent } from '../../core/models';
+import { Dues } from '../../core/models';
+import { PaymentFlow } from '../../core/payment-flow';
 
-type Payment = { status: 'idle' } | { status: 'starting' } | { status: 'started'; intent: PaymentIntent } | { status: 'failed'; message: string };
+type Payment =
+  | { status: 'idle' }
+  | { status: 'working' }
+  | { status: 'received' }
+  | { status: 'alreadyPaid' }
+  | { status: 'notConfirmed' }
+  | { status: 'failed'; message: string };
 
 @Component({
   selector: 'app-owner-home',
@@ -28,6 +34,12 @@ type Payment = { status: 'idle' } | { status: 'starting' } | { status: 'started'
         </div>
       }
       @case ('ready') {
+        @if (payment().status === 'received') {
+          <p class="notice" role="status">Payment received. Thank you.</p>
+        }
+        @if (payment().status === 'alreadyPaid') {
+          <p class="notice" role="status">This month is already paid.</p>
+        }
         @if (dues(); as d) {
           <section class="hero" aria-label="Dues for {{ monthName }}">
             <div class="hero-top">
@@ -59,15 +71,15 @@ type Payment = { status: 'idle' } | { status: 'starting' } | { status: 'started'
               <div class="line total"><span>Total due</span><span class="mono">{{ money(d.totalPaise) }}</span></div>
             </section>
 
-            @if (started(); as intent) {
+            @if (payment().status === 'notConfirmed') {
               <section class="card" role="status">
-                <h2>Payment started</h2>
-                <p>Total {{ money(intent.totalPaise) }}</p>
-                <p class="muted">The online payment page is not connected yet, so nothing has been charged.</p>
+                <h2>Payment not confirmed yet</h2>
+                <p>Your payment is not confirmed yet. If money was taken, it will show as Paid shortly, so do not pay again.</p>
+                <button class="btn" type="button" (click)="checkAgain()">Check again</button>
               </section>
             } @else {
-              <button class="btn primary" type="button" [disabled]="payment().status === 'starting'" (click)="payNow()">
-                @if (payment().status === 'starting') { Starting… } @else { Pay now {{ money(d.totalPaise) }} }
+              <button class="btn primary" type="button" [disabled]="payment().status === 'working'" (click)="payNow()">
+                @if (payment().status === 'working') { Opening payment… } @else { Pay now {{ money(d.totalPaise) }} }
               </button>
               @if (failure(); as text) {
                 <p class="error" role="alert">{{ text }}</p>
@@ -89,6 +101,7 @@ type Payment = { status: 'idle' } | { status: 'starting' } | { status: 'started'
 export class OwnerHome {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  private readonly flow = inject(PaymentFlow);
 
   protected readonly month = monthOf(inject(NOW)());
   protected readonly monthName = monthLabel(this.month);
@@ -116,11 +129,6 @@ export class OwnerHome {
       : 'We could not load your dues.';
   }
 
-  protected started(): PaymentIntent | null {
-    const p = this.payment();
-    return p.status === 'started' ? p.intent : null;
-  }
-
   protected failure(): string | null {
     const p = this.payment();
     return p.status === 'failed' ? p.message : null;
@@ -138,20 +146,40 @@ export class OwnerHome {
     });
   }
 
-  protected payNow(): void {
+  protected checkAgain(): void {
+    this.payment.set({ status: 'idle' });
+    this.load();
+  }
+
+  protected async payNow(): Promise<void> {
     if (this.flatId === null) {
       return;
     }
-    this.payment.set({ status: 'starting' });
-    this.api.startPayment(this.flatId, this.month).subscribe({
-      next: (intent) => this.payment.set({ status: 'started', intent }),
-      error: (e: unknown) => {
-        const alreadyPaid = e instanceof HttpErrorResponse && e.status === 409;
-        this.payment.set({
-          status: 'failed',
-          message: alreadyPaid ? 'This month is already paid.' : 'We could not start the payment. Try again.',
-        });
-      },
-    });
+    this.payment.set({ status: 'working' });
+    const outcome = await this.flow.pay(this.flatId, this.month, this.auth.session()?.name ?? '');
+    switch (outcome.kind) {
+      case 'paid':
+        this.payment.set({ status: 'received' });
+        this.load();
+        break;
+      case 'notConfirmed':
+        this.payment.set({ status: 'notConfirmed' });
+        break;
+      case 'cancelled':
+        this.payment.set({ status: 'failed', message: 'Payment cancelled. Nothing was charged.' });
+        break;
+      case 'pageUnavailable':
+        this.payment.set({ status: 'failed', message: 'We could not open the payment page. Try again.' });
+        break;
+      case 'providerDown':
+        this.payment.set({ status: 'failed', message: 'The payment provider is not available. Try again in a moment.' });
+        break;
+      case 'alreadyPaid':
+        this.payment.set({ status: 'alreadyPaid' });
+        this.load();
+        break;
+      default:
+        this.payment.set({ status: 'failed', message: 'We could not start the payment. Try again.' });
+    }
   }
 }

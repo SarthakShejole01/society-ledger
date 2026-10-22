@@ -5,13 +5,16 @@ import { provideRouter } from '@angular/router';
 import { NEVER, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { ApiService } from '../../core/api.service';
+import { PaymentFlow, PayOutcome } from '../../core/payment-flow';
 import { AuthService } from '../../core/auth.service';
 import { NOW } from '../../core/clock';
 import { Dues } from '../../core/models';
 import { OwnerHome } from './owner-home';
 
 describe('OwnerHome', () => {
-  const api = { dues: vi.fn(), startPayment: vi.fn() };
+  const api = { dues: vi.fn() };
+  const flow = { pay: vi.fn() };
+  const intent = { paymentId: 'p1', flatId: 'flat-304', month: '2026-10', totalPaise: 160000, lateFeePaise: 10000, currency: 'INR', gatewayOrderId: 'o1', checkoutKey: 'k' };
   const session = signal({ token: 't', role: 'OWNER' as const, flatId: 'flat-304' as string | null, name: 'Rajesh K', societyCode: 'sunrise' });
   let now = '2026-10-20T10:00:00Z';
   let fixture: ComponentFixture<OwnerHome>;
@@ -27,6 +30,7 @@ describe('OwnerHome', () => {
       providers: [
         provideRouter([]),
         { provide: ApiService, useValue: api },
+        { provide: PaymentFlow, useValue: flow },
         { provide: AuthService, useValue: { session } },
         { provide: NOW, useValue: () => new Date(now) },
       ],
@@ -111,36 +115,104 @@ describe('OwnerHome', () => {
     expect(page.textContent).toContain('₹1,600');
   });
 
-  it('starts a payment for the flat and month, never sending an amount', async () => {
+  async function payWith(outcome: PayOutcome): Promise<void> {
+    flow.pay.mockResolvedValue(outcome);
+    press('Pay now');
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  it('pays this flat and month and records the owner as the payer', async () => {
     api.dues.mockReturnValue(of(unpaid));
-    api.startPayment.mockReturnValue(of({ paymentId: 'p1', flatId: 'flat-304', month: '2026-10', totalPaise: 160000, lateFeePaise: 10000 }));
     await open();
 
-    press('Pay now');
+    await payWith({ kind: 'paid', intent });
 
-    expect(api.startPayment).toHaveBeenCalledWith('flat-304', '2026-10');
-    expect(page.textContent).toContain('Payment started');
-    expect(page.textContent).toContain('₹1,600');
+    expect(flow.pay).toHaveBeenCalledWith('flat-304', '2026-10', 'Rajesh K');
   });
 
-  it('explains when the month turns out to be paid already', async () => {
-    api.dues.mockReturnValue(of(unpaid));
-    api.startPayment.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 409 })));
+  it('shows the month as paid after a payment goes through', async () => {
+    api.dues.mockReturnValueOnce(of(unpaid));
     await open();
+    api.dues.mockReturnValue(of(paid));
+
+    await payWith({ kind: 'paid', intent });
+
+    expect(page.textContent).toContain('Payment received');
+    expect(page.textContent).toContain('Nothing to pay');
+  });
+
+  it('cannot be pressed twice while a payment is under way', async () => {
+    api.dues.mockReturnValue(of(unpaid));
+    await open();
+    flow.pay.mockReturnValue(new Promise(() => undefined));
 
     press('Pay now');
 
+    const button = Array.from(page.querySelectorAll('button')).find((b) => b.textContent?.includes('Opening'));
+    expect(button?.disabled).toBe(true);
+  });
+
+  it('says nothing was charged when the payment page is closed', async () => {
+    api.dues.mockReturnValue(of(unpaid));
+    await open();
+
+    await payWith({ kind: 'cancelled' });
+
+    expect(page.textContent).toContain('Payment cancelled');
+    expect(page.textContent).toContain('Nothing was charged');
+    expect(Array.from(page.querySelectorAll('button')).some((b) => b.textContent?.includes('Pay now'))).toBe(true);
+  });
+
+  it('says so when the payment page cannot be opened', async () => {
+    api.dues.mockReturnValue(of(unpaid));
+    await open();
+
+    await payWith({ kind: 'pageUnavailable' });
+
+    expect(page.textContent).toContain('could not open the payment page');
+  });
+
+  it('says so when the payment provider is down', async () => {
+    api.dues.mockReturnValue(of(unpaid));
+    await open();
+
+    await payWith({ kind: 'providerDown' });
+
+    expect(page.textContent).toContain('payment provider is not available');
+  });
+
+  it('explains when the month turns out to be paid already, and shows the real state', async () => {
+    api.dues.mockReturnValueOnce(of(unpaid));
+    await open();
+    api.dues.mockReturnValue(of(paid));
+
+    await payWith({ kind: 'alreadyPaid' });
+
     expect(page.textContent).toContain('already paid');
+    expect(page.textContent).toContain('Nothing to pay');
   });
 
   it('shows a plain message when starting the payment fails', async () => {
     api.dues.mockReturnValue(of(unpaid));
-    api.startPayment.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
     await open();
 
-    press('Pay now');
+    await payWith({ kind: 'failed' });
 
     expect(page.textContent).toContain('could not start');
+  });
+
+  it('asks the owner to check again when money may have been taken but is not confirmed', async () => {
+    api.dues.mockReturnValueOnce(of(unpaid));
+    await open();
+
+    await payWith({ kind: 'notConfirmed', intent });
+
+    expect(page.textContent).toContain('not confirmed yet');
+    expect(page.textContent).toContain('do not pay again');
+    api.dues.mockReturnValue(of(paid));
+    press('Check again');
+    expect(page.textContent).toContain('Nothing to pay');
   });
 
   it('says so when the login is not linked to a flat', async () => {

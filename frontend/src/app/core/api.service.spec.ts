@@ -37,7 +37,7 @@ describe('ApiService', () => {
     const req = http.expectOne('/api/payments');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({ flatId: 'flat-1', month: '2026-10' });
-    req.flush({ paymentId: 'p1', flatId: 'flat-1', month: '2026-10', totalPaise: 160000, lateFeePaise: 10000 });
+    req.flush({ paymentId: 'p1', flatId: 'flat-1', month: '2026-10', totalPaise: 160000, lateFeePaise: 10000, currency: 'INR', gatewayOrderId: 'o1', checkoutKey: 'k' });
   });
 
   it('gets the dashboard for a month', () => {
@@ -59,5 +59,14 @@ describe('ApiService', () => {
     });
     expect(Object.keys(req.request.body as object).some((k) => k.toLowerCase().includes('amount'))).toBe(false);
     req.flush({ paymentId: 'p1', totalPaise: 150000, lateFeePaise: 0, waivedPaise: 10000 });
+  });
+
+  it('sends the payment proof for the server to check', () => {
+    api.confirmPayment('p1', { gatewayOrderId: 'order_1', gatewayPaymentId: 'pay_1', signature: 'sig' }).subscribe();
+
+    const req = http.expectOne('/api/payments/p1/confirm');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ gatewayOrderId: 'order_1', gatewayPaymentId: 'pay_1', signature: 'sig' });
+    req.flush({ status: 'PAID' });
   });
 });

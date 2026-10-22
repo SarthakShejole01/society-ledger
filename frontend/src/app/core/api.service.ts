@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Dues, FlatStatus, MonthDashboard, OfflinePaymentRequest, OfflinePaymentResult, PaymentIntent } from './models';
+import { CheckoutProof, Dues, FlatStatus, MonthDashboard, OfflinePaymentRequest, OfflinePaymentResult, PaymentIntent } from './models';
 
 /** The only place the app talks to the server's data endpoints. Months are written 2026-10. */
 @Injectable({ providedIn: 'root' })
@@ -19,6 +19,11 @@ export class ApiService {
   /** The server decides the amount, so none is sent. */
   startPayment(flatId: string, month: string): Observable<PaymentIntent> {
     return this.http.post<PaymentIntent>('/api/payments', { flatId, month });
+  }
+
+  /** Hands the payment page's proof to the server, which checks it. Only the server can mark a flat Paid. */
+  confirmPayment(paymentId: string, proof: CheckoutProof): Observable<{ status: string }> {
+    return this.http.post<{ status: string }>(`/api/payments/${paymentId}/confirm`, proof);
   }
 
   dashboard(month: string): Observable<MonthDashboard> {

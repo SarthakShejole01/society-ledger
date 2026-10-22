@@ -1,18 +1,19 @@
-import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { NOW } from '../../core/clock';
 import { LoadState } from '../../core/load-state';
-import { FlatStatus, PaymentIntent } from '../../core/models';
+import { FlatStatus } from '../../core/models';
+import { PaymentFlow } from '../../core/payment-flow';
 import { formatRupees } from '../../core/money';
 import { monthLabel, monthOf } from '../../core/month';
 
 type Payment =
   | { status: 'idle' }
-  | { status: 'starting' }
-  | { status: 'started'; flatNumber: string; intent: PaymentIntent }
+  | { status: 'working' }
+  | { status: 'received'; flatNumber: string; totalPaise: number; lateFeePaise: number }
+  | { status: 'notConfirmed' }
   | { status: 'failed'; message: string };
 
 /** Pays the maintenance of another flat in the society. The server decides the amount and records who paid. */
@@ -36,16 +37,21 @@ type Payment =
         </div>
       }
       @case ('ready') {
-        @if (started(); as done) {
+        @if (received(); as done) {
           <section class="card" role="status">
-            <h2>Payment started</h2>
-            <p>Flat {{ done.flatNumber }} · Total {{ money(done.intent.totalPaise) }}</p>
-            @if (done.intent.lateFeePaise > 0) {
-              <p class="muted">This includes a late fee of {{ money(done.intent.lateFeePaise) }}.</p>
+            <h2>Payment received</h2>
+            <p>Flat {{ done.flatNumber }} · Total {{ money(done.totalPaise) }}</p>
+            @if (done.lateFeePaise > 0) {
+              <p class="muted">This included a late fee of {{ money(done.lateFeePaise) }}.</p>
             }
-            <p class="muted">The online payment page is not connected yet, so nothing has been charged.</p>
           </section>
           <a class="btn ghost" routerLink="/home">Back to home</a>
+        } @else if (payment().status === 'notConfirmed') {
+          <section class="card" role="status">
+            <h2>Payment not confirmed yet</h2>
+            <p>The payment is not confirmed yet. If money was taken, it will show as Paid shortly, so do not pay again.</p>
+            <button class="btn" type="button" (click)="checkAgain()">Check again</button>
+          </section>
         } @else if (others().length === 0) {
           <p class="muted">Every other flat has paid for {{ monthName }}.</p>
           <a class="btn ghost" routerLink="/home">Back to home</a>
@@ -63,7 +69,9 @@ type Payment =
             @if (failure(); as text) {
               <p class="error" role="alert">{{ text }}</p>
             }
-            <button class="btn primary" type="submit" [disabled]="payment().status === 'starting'">Start payment</button>
+            <button class="btn primary" type="submit" [disabled]="payment().status === 'working'">
+              @if (payment().status === 'working') { Opening payment… } @else { Pay for this flat }
+            </button>
           </form>
         }
       }
@@ -82,6 +90,7 @@ export class PayForAnother {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
+  private readonly flow = inject(PaymentFlow);
 
   protected readonly month = monthOf(inject(NOW)());
   protected readonly monthName = monthLabel(this.month);
@@ -108,9 +117,9 @@ export class PayForAnother {
     return (event.target as HTMLSelectElement).value;
   }
 
-  protected started(): { flatNumber: string; intent: PaymentIntent } | null {
+  protected received(): { flatNumber: string; totalPaise: number; lateFeePaise: number } | null {
     const p = this.payment();
-    return p.status === 'started' ? p : null;
+    return p.status === 'received' ? p : null;
   }
 
   protected failure(): string | null {
@@ -126,22 +135,46 @@ export class PayForAnother {
     });
   }
 
-  protected start(): void {
+  protected checkAgain(): void {
+    this.payment.set({ status: 'idle' });
+    this.load();
+  }
+
+  protected async start(): Promise<void> {
     const flat = this.selected();
     if (!flat) {
       return;
     }
-    this.payment.set({ status: 'starting' });
-    this.api.startPayment(flat.flatId, this.month).subscribe({
-      next: (intent) => this.payment.set({ status: 'started', flatNumber: flat.number, intent }),
-      error: (e: unknown) =>
+    this.payment.set({ status: 'working' });
+    const outcome = await this.flow.pay(flat.flatId, this.month, this.auth.session()?.name ?? '');
+    switch (outcome.kind) {
+      case 'paid':
         this.payment.set({
-          status: 'failed',
-          message:
-            e instanceof HttpErrorResponse && e.status === 409
-              ? 'That flat has already paid for this month.'
-              : 'We could not start the payment. Try again.',
-        }),
-    });
+          status: 'received',
+          flatNumber: flat.number,
+          totalPaise: outcome.intent.totalPaise,
+          lateFeePaise: outcome.intent.lateFeePaise,
+        });
+        this.load();
+        break;
+      case 'notConfirmed':
+        this.payment.set({ status: 'notConfirmed' });
+        break;
+      case 'cancelled':
+        this.payment.set({ status: 'failed', message: 'Payment cancelled. Nothing was charged.' });
+        break;
+      case 'pageUnavailable':
+        this.payment.set({ status: 'failed', message: 'We could not open the payment page. Try again.' });
+        break;
+      case 'providerDown':
+        this.payment.set({ status: 'failed', message: 'The payment provider is not available. Try again in a moment.' });
+        break;
+      case 'alreadyPaid':
+        this.payment.set({ status: 'failed', message: 'That flat has already paid for this month.' });
+        this.load();
+        break;
+      default:
+        this.payment.set({ status: 'failed', message: 'We could not start the payment. Try again.' });
+    }
   }
 }
