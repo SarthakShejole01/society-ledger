@@ -1,0 +1,26 @@
+# Render Blueprint for a TRIAL deployment of the web service. The database is created by hand first
+# (see docs/render.md) because the restricted application role must exist before the app starts.
+services:
+  - type: web
+    name: society-ledger
+    runtime: docker
+    plan: free
+    healthCheckPath: /actuator/health
+    envVars:
+      # Trial only: logs login codes and uses the fake payment provider. Remove for real members.
+      - key: SPRING_PROFILES_ACTIVE
+        value: dev
+      - key: SPRING_DATASOURCE_URL        # jdbc:postgresql://<internal host>:5432/<database>
+        sync: false
+      - key: SPRING_DATASOURCE_USERNAME
+        value: ledger_app
+      - key: SPRING_DATASOURCE_PASSWORD   # the APP_DB_PASSWORD you chose in docs/render.md
+        sync: false
+      - key: SPRING_FLYWAY_URL            # same as SPRING_DATASOURCE_URL
+        sync: false
+      - key: SPRING_FLYWAY_USER           # the database's own user (the owner)
+        sync: false
+      - key: SPRING_FLYWAY_PASSWORD
+        sync: false
+      - key: SOCIETY_LEDGER_AUTH_SECRET
+        generateValue: true
