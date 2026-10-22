@@ -51,13 +51,16 @@ public class DashboardService {
 							rs.getLong("fees"), rs.getLong("waived") })
 					.single();
 			List<PendingFlat> pending = jdbc.sql("""
-					select f.number, f.floor, coalesce(c.amount_paise, f.monthly_amount_paise) as amount_paise
+					select f.id, f.number, f.floor, coalesce(c.amount_paise, f.monthly_amount_paise) as amount_paise
 					from flats f left join charges c on c.flat_id = f.id and c.month = :month
 					where not exists (select 1 from payments p where p.charge_id = c.id and p.status = 'CONFIRMED')
 					order by f.floor, f.number""")
 					.param("month", firstDay)
-					.query((rs, row) -> new PendingFlat(rs.getString("number"), rs.getInt("floor"),
-							Money.ofPaise(rs.getLong("amount_paise")).plus(lateFeeNow)))
+					.query((rs, row) -> {
+						Money amount = Money.ofPaise(rs.getLong("amount_paise"));
+						return new PendingFlat(rs.getObject("id", UUID.class), rs.getString("number"), rs.getInt("floor"),
+								amount, amount.plus(lateFeeNow));
+					})
 					.list();
 			return new Dashboard(month, (int) flatTotals[0], (int) paid[0], pending.size(), Money.ofPaise(flatTotals[1]),
 					Money.ofPaise(paid[1]), Money.ofPaise(paid[2]), Money.ofPaise(paid[1] - paid[2]),

@@ -125,6 +125,18 @@ class DashboardServiceTest {
 	}
 
 	@Test
+	void pending_flats_carry_their_id_and_their_amount_before_any_late_fee() {
+		clock.set("2026-10-20T10:00:00Z");
+
+		Dashboard result = dashboard.forMonth(SUNRISE, OCTOBER);
+
+		PendingFlat first = result.pending().get(0);
+		assertThat(first.flatId()).isEqualTo(flat301.id());
+		assertThat(first.amount()).isEqualTo(Money.rupees(1000));
+		assertThat(first.dueNow()).isEqualTo(Money.rupees(1100));
+	}
+
+	@Test
 	void another_societys_money_is_not_counted() {
 		Flat other = scope.inSociety(LAKEVIEW, () -> flats.add(LAKEVIEW, "A-1", 1, Money.rupees(5000)));
 

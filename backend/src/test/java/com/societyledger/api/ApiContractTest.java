@@ -332,7 +332,7 @@ class ApiContractTest {
 	void the_treasurer_and_committee_see_the_dashboard_and_owners_do_not() throws Exception {
 		given(dashboard.forMonth(SOCIETY, OCTOBER)).willReturn(new Dashboard(OCTOBER, 45, 31, 14, Money.rupees(70000),
 				Money.rupees(50000), Money.rupees(30000), Money.rupees(20000), Money.rupees(400), Money.rupees(100),
-				List.of(new PendingFlat("305", 3, Money.rupees(1600)))));
+				List.of(new PendingFlat(OTHER_FLAT, "305", 3, Money.rupees(1500), Money.rupees(1600)))));
 
 		mvc.perform(get("/api/dashboard").param("month", "2026-10").header("Authorization", "Bearer treasurer-token"))
 				.andExpect(status().isOk())
@@ -343,7 +343,9 @@ class ApiContractTest {
 				.andExpect(jsonPath("$.onlineCollectedPaise").value(3000000))
 				.andExpect(jsonPath("$.offlineCollectedPaise").value(2000000))
 				.andExpect(jsonPath("$.lateFeesWaivedPaise").value(10000))
+				.andExpect(jsonPath("$.pending[0].flatId").value(OTHER_FLAT.toString()))
 				.andExpect(jsonPath("$.pending[0].number").value("305"))
+				.andExpect(jsonPath("$.pending[0].amountPaise").value(150000))
 				.andExpect(jsonPath("$.pending[0].dueNowPaise").value(160000));
 
 		mvc.perform(get("/api/dashboard").param("month", "2026-10").header("Authorization", "Bearer committee-token"))

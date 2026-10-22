@@ -6,6 +6,7 @@ import com.societyledger.common.web.AuthenticatedPrincipal;
 import com.societyledger.common.web.ForbiddenException;
 import java.time.YearMonth;
 import java.util.List;
+import java.util.UUID;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 class DashboardController {
 
-	record PendingResponse(String number, int floor, long dueNowPaise) {
+	record PendingResponse(UUID flatId, String number, int floor, long amountPaise, long dueNowPaise) {
 	}
 
 	record DashboardResponse(String month, int flatCount, int paidCount, int pendingCount, long expectedPaise,
@@ -38,6 +39,6 @@ class DashboardController {
 		return new DashboardResponse(d.month().toString(), d.flatCount(), d.paidCount(), d.pendingCount(),
 				d.expected().paise(), d.collected().paise(), d.onlineCollected().paise(), d.offlineCollected().paise(),
 				d.lateFeesCollected().paise(), d.lateFeesWaived().paise(),
-				d.pending().stream().map(p -> new PendingResponse(p.number(), p.floor(), p.dueNow().paise())).toList());
+				d.pending().stream().map(p -> new PendingResponse(p.flatId(), p.number(), p.floor(), p.amount().paise(), p.dueNow().paise())).toList());
 	}
 }
