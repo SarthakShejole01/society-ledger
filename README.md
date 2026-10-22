@@ -4,11 +4,16 @@ Maintenance collection and tracking for housing societies. Owners see what is du
 
 Status: early development (version 1 for the first society). See `docs/requirements.md`.
 
+## Deploying
+
+See `docs/deployment.md`: the container image, settings, first deploy, loading a society, backups and what has and has not been checked.
+
 ## Layout
 
 - `backend/` Java 21, Spring Boot, PostgreSQL
 - `frontend/` Angular web app for phones and desktops
-- `docs/` requirements and decisions
+- `deploy/` database role, backup, restore and society loading scripts
+- `docs/` requirements, decisions and deployment
 
 ## Run the backend tests
 
