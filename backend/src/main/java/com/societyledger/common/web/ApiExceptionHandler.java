@@ -6,6 +6,9 @@ import com.societyledger.payment.AlreadyPaidException;
 import com.societyledger.payment.AmountMismatchException;
 import com.societyledger.payment.FlatNotFoundException;
 import com.societyledger.payment.GatewayReferenceReusedException;
+import com.societyledger.payment.GatewayUnavailableException;
+import com.societyledger.payment.InvalidSignatureException;
+import com.societyledger.payment.InvalidWebhookException;
 import com.societyledger.payment.WaiverReasonRequiredException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -30,6 +33,16 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(WaiverReasonRequiredException.class)
 	ProblemDetail waiverReasonRequired(WaiverReasonRequiredException e) {
 		return problem(HttpStatus.BAD_REQUEST, e.getMessage());
+	}
+
+	@ExceptionHandler({ InvalidSignatureException.class, InvalidWebhookException.class })
+	ProblemDetail untrusted(RuntimeException e) {
+		return problem(HttpStatus.BAD_REQUEST, e.getMessage());
+	}
+
+	@ExceptionHandler(GatewayUnavailableException.class)
+	ProblemDetail gatewayUnavailable(GatewayUnavailableException e) {
+		return problem(HttpStatus.BAD_GATEWAY, "The payment provider is not available. Try again in a moment.");
 	}
 
 	@ExceptionHandler(ForbiddenException.class)

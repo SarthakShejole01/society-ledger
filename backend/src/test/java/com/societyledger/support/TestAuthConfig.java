@@ -2,6 +2,7 @@ package com.societyledger.support;
 
 import com.societyledger.auth.OtpCodeGenerator;
 import com.societyledger.auth.OtpDispatcher;
+import com.societyledger.payment.PaymentGateway;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
@@ -25,5 +26,11 @@ public class TestAuthConfig {
 	@Primary
 	OtpDispatcher directOtpDispatcher() {
 		return new DirectOtpDispatcher();
+	}
+
+	@Bean
+	@Primary
+	RecordingGateway recordingGateway() {
+		return new RecordingGateway();
 	}
 }

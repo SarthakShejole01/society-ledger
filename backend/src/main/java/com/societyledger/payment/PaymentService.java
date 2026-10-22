@@ -23,14 +23,16 @@ public class PaymentService {
 	private final ChargeRepository charges;
 	private final PaymentRepository payments;
 	private final LateFeePolicy lateFeePolicy;
+	private final PaymentGateway gateway;
 	private final Clock clock;
 
 	public PaymentService(SocietyScope scope, ChargeRepository charges, PaymentRepository payments,
-			LateFeePolicy lateFeePolicy, Clock clock) {
+			LateFeePolicy lateFeePolicy, PaymentGateway gateway, Clock clock) {
 		this.scope = scope;
 		this.charges = charges;
 		this.payments = payments;
 		this.lateFeePolicy = lateFeePolicy;
+		this.gateway = gateway;
 		this.clock = clock;
 	}
 
@@ -44,7 +46,10 @@ public class PaymentService {
 			Money lateFee = lateFeePolicy.feeFor(month, startedAt);
 			Money total = charge.amount().plus(lateFee);
 			UUID paymentId = payments.insertPending(societyId, charge.id(), payerName, total, lateFee, startedAt);
-			return new PaymentIntent(paymentId, flatId, month, total, lateFee);
+			// If the provider cannot be reached this throws, and the pending payment is rolled back with it.
+			GatewayOrder order = gateway.createOrder(paymentId, total);
+			payments.setOrderId(paymentId, order.orderId());
+			return new PaymentIntent(paymentId, flatId, month, total, lateFee, order.orderId(), gateway.checkoutKey());
 		});
 	}
 
@@ -72,5 +77,28 @@ public class PaymentService {
 			}
 			return null;
 		});
+	}
+
+	/**
+	 * The browser reports a finished payment. It counts only when the proof is signed by the provider for the
+	 * order we created, which is looked up from our own record and never taken from the browser.
+	 */
+	public void confirmCheckout(UUID societyId, UUID paymentId, String orderId, String gatewayPaymentId, String signature) {
+		scope.inSociety(societyId, () -> {
+			PaymentRepository.Row payment = payments.findById(paymentId).orElseThrow(FlatNotFoundException::new);
+			boolean matches = payment.gatewayOrderId() != null && payment.gatewayOrderId().equals(orderId)
+					&& gateway.isValidCheckoutSignature(payment.gatewayOrderId(), gatewayPaymentId, signature);
+			if (!matches) {
+				throw new InvalidSignatureException();
+			}
+			confirm(societyId, paymentId, gatewayPaymentId, "ONLINE", payment.amount());
+			return null;
+		});
+	}
+
+	/** The provider reports a payment. Orders we do not know are ignored, and repeats are harmless. */
+	public void confirmFromWebhook(GatewayPayment event) {
+		payments.contextForOrder(event.orderId()).ifPresent(context ->
+				confirm(context.societyId(), context.paymentId(), event.gatewayPaymentId(), event.method(), event.amount()));
 	}
 }

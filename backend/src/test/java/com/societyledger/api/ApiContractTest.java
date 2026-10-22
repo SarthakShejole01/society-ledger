@@ -26,6 +26,12 @@ import com.societyledger.billing.PendingFlat;
 import com.societyledger.billing.StatusBoardService;
 import com.societyledger.common.Money;
 import com.societyledger.payment.AlreadyPaidException;
+import com.societyledger.payment.AmountMismatchException;
+import com.societyledger.payment.GatewayPayment;
+import com.societyledger.payment.GatewayUnavailableException;
+import com.societyledger.payment.InvalidSignatureException;
+import com.societyledger.payment.InvalidWebhookException;
+import com.societyledger.payment.PaymentGateway;
 import com.societyledger.payment.OfflineMethod;
 import com.societyledger.payment.OfflinePaymentCommand;
 import com.societyledger.payment.OfflinePaymentResult;
@@ -72,6 +78,8 @@ class ApiContractTest {
 	private OfflinePaymentService offline;
 	@MockitoBean
 	private DashboardService dashboard;
+	@MockitoBean
+	private PaymentGateway gateway;
 
 	@BeforeEach
 	void knownSessions() {
@@ -219,7 +227,7 @@ class ApiContractTest {
 	void an_owner_can_start_a_payment_for_any_flat_and_is_recorded_as_the_payer() throws Exception {
 		UUID paymentId = UUID.randomUUID();
 		given(payments.start(SOCIETY, OTHER_FLAT, OCTOBER, "Rajesh K")).willReturn(
-				new PaymentIntent(paymentId, OTHER_FLAT, OCTOBER, Money.rupees(1300), Money.rupees(100)));
+				new PaymentIntent(paymentId, OTHER_FLAT, OCTOBER, Money.rupees(1300), Money.rupees(100), "order_X", "rzp_test_key"));
 
 		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
 				.header("Authorization", "Bearer owner-token")
@@ -233,7 +241,7 @@ class ApiContractTest {
 	@Test
 	void a_client_cannot_choose_the_amount() throws Exception {
 		given(payments.start(any(), any(), any(), any())).willReturn(
-				new PaymentIntent(UUID.randomUUID(), OWN_FLAT, OCTOBER, Money.rupees(1500), Money.ZERO));
+				new PaymentIntent(UUID.randomUUID(), OWN_FLAT, OCTOBER, Money.rupees(1500), Money.ZERO, "order_X", "rzp_test_key"));
 
 		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
 				.header("Authorization", "Bearer owner-token")
@@ -255,7 +263,7 @@ class ApiContractTest {
 	@Test
 	void a_committee_member_can_pay_their_own_flat() throws Exception {
 		given(payments.start(SOCIETY, OWN_FLAT, OCTOBER, "Anil C")).willReturn(
-				new PaymentIntent(UUID.randomUUID(), OWN_FLAT, OCTOBER, Money.rupees(1500), Money.ZERO));
+				new PaymentIntent(UUID.randomUUID(), OWN_FLAT, OCTOBER, Money.rupees(1500), Money.ZERO, "order_X", "rzp_test_key"));
 
 		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
 				.header("Authorization", "Bearer committee-flat-token")
@@ -376,5 +384,137 @@ class ApiContractTest {
 				.andExpect(status().isOk());
 		mvc.perform(get("/api/dashboard").param("month", "2026-10").header("Authorization", "Bearer owner-token"))
 				.andExpect(status().isForbidden());
+	}
+
+	// --- paying online ---
+
+	@Test
+	void starting_a_payment_returns_what_the_browser_needs_to_open_the_payment_page() throws Exception {
+		given(payments.start(SOCIETY, OWN_FLAT, OCTOBER, "Rajesh K")).willReturn(
+				new PaymentIntent(UUID.randomUUID(), OWN_FLAT, OCTOBER, Money.rupees(1600), Money.rupees(100), "order_Abc", "rzp_test_key"));
+
+		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer owner-token")
+				.content("{\"flatId\":\"" + OWN_FLAT + "\",\"month\":\"2026-10\"}"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.gatewayOrderId").value("order_Abc"))
+				.andExpect(jsonPath("$.checkoutKey").value("rzp_test_key"))
+				.andExpect(jsonPath("$.totalPaise").value(160000))
+				.andExpect(jsonPath("$.currency").value("INR"));
+	}
+
+	@Test
+	void an_unreachable_payment_provider_answers_502_as_a_problem() throws Exception {
+		given(payments.start(any(), any(), any(), any())).willThrow(new GatewayUnavailableException(new RuntimeException("down")));
+
+		mvc.perform(post("/api/payments").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer owner-token")
+				.content("{\"flatId\":\"" + OWN_FLAT + "\",\"month\":\"2026-10\"}"))
+				.andExpect(status().isBadGateway())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	private static final String CONFIRM_BODY = "{\"gatewayOrderId\":\"order_Abc\",\"gatewayPaymentId\":\"pay_Xyz\",\"signature\":\"sig\"}";
+
+	@Test
+	void the_browser_confirms_a_finished_payment_with_the_providers_proof() throws Exception {
+		UUID paymentId = UUID.randomUUID();
+
+		mvc.perform(post("/api/payments/" + paymentId + "/confirm").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer owner-token").content(CONFIRM_BODY))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("PAID"));
+
+		verify(payments).confirmCheckout(SOCIETY, paymentId, "order_Abc", "pay_Xyz", "sig");
+	}
+
+	@Test
+	void a_proof_that_does_not_check_out_answers_400() throws Exception {
+		org.mockito.Mockito.doThrow(new InvalidSignatureException()).when(payments).confirmCheckout(any(), any(), any(), any(), any());
+
+		mvc.perform(post("/api/payments/" + UUID.randomUUID() + "/confirm").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer owner-token").content(CONFIRM_BODY))
+				.andExpect(status().isBadRequest())
+				.andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+	}
+
+	@Test
+	void confirming_needs_a_login() throws Exception {
+		mvc.perform(post("/api/payments/" + UUID.randomUUID() + "/confirm").contentType(MediaType.APPLICATION_JSON).content(CONFIRM_BODY))
+				.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void a_confirmation_with_a_missing_field_answers_400() throws Exception {
+		mvc.perform(post("/api/payments/" + UUID.randomUUID() + "/confirm").contentType(MediaType.APPLICATION_JSON)
+				.header("Authorization", "Bearer owner-token").content("{\"gatewayOrderId\":\"order_Abc\"}"))
+				.andExpect(status().isBadRequest());
+	}
+
+	// --- the provider's own notification: no login, trusted only by its signature ---
+
+	private static final GatewayPayment CAPTURED = new GatewayPayment("order_Abc", "pay_Xyz", Money.rupees(1600), "upi");
+
+	@Test
+	void a_signed_webhook_confirms_the_payment_without_a_login() throws Exception {
+		given(gateway.readWebhook(any(), eq("sig"))).willReturn(Optional.of(CAPTURED));
+
+		mvc.perform(post("/api/gateway/webhook").contentType(MediaType.APPLICATION_JSON)
+				.header("X-Razorpay-Signature", "sig").content("{\"event\":\"payment.captured\"}"))
+				.andExpect(status().isOk());
+
+		verify(payments).confirmFromWebhook(CAPTURED);
+	}
+
+	@Test
+	void a_webhook_that_cannot_be_trusted_answers_400_and_confirms_nothing() throws Exception {
+		given(gateway.readWebhook(any(), any())).willThrow(new InvalidWebhookException());
+
+		mvc.perform(post("/api/gateway/webhook").contentType(MediaType.APPLICATION_JSON)
+				.header("X-Razorpay-Signature", "forged").content("{}"))
+				.andExpect(status().isBadRequest());
+
+		verify(payments, never()).confirmFromWebhook(any());
+	}
+
+	@Test
+	void a_webhook_with_no_signature_header_is_not_trusted() throws Exception {
+		given(gateway.readWebhook(any(), eq(null))).willThrow(new InvalidWebhookException());
+
+		mvc.perform(post("/api/gateway/webhook").contentType(MediaType.APPLICATION_JSON).content("{}"))
+				.andExpect(status().isBadRequest());
+
+		verify(payments, never()).confirmFromWebhook(any());
+	}
+
+	@Test
+	void an_event_we_do_not_act_on_is_acknowledged_and_ignored() throws Exception {
+		given(gateway.readWebhook(any(), any())).willReturn(Optional.empty());
+
+		mvc.perform(post("/api/gateway/webhook").contentType(MediaType.APPLICATION_JSON)
+				.header("X-Razorpay-Signature", "sig").content("{\"event\":\"payment.failed\"}"))
+				.andExpect(status().isOk());
+
+		verify(payments, never()).confirmFromWebhook(any());
+	}
+
+	@Test
+	void a_webhook_with_the_wrong_amount_is_acknowledged_so_it_is_not_retried_forever() throws Exception {
+		given(gateway.readWebhook(any(), any())).willReturn(Optional.of(CAPTURED));
+		org.mockito.Mockito.doThrow(new AmountMismatchException()).when(payments).confirmFromWebhook(any());
+
+		mvc.perform(post("/api/gateway/webhook").contentType(MediaType.APPLICATION_JSON)
+				.header("X-Razorpay-Signature", "sig").content("{}"))
+				.andExpect(status().isOk());
+	}
+
+	@Test
+	void a_failure_on_our_side_is_not_swallowed_so_the_provider_tries_again() {
+		given(gateway.readWebhook(any(), any())).willReturn(Optional.of(CAPTURED));
+		org.mockito.Mockito.doThrow(new IllegalStateException("database down")).when(payments).confirmFromWebhook(any());
+
+		org.assertj.core.api.Assertions.assertThatThrownBy(() -> mvc.perform(post("/api/gateway/webhook")
+				.contentType(MediaType.APPLICATION_JSON).header("X-Razorpay-Signature", "sig").content("{}")))
+				.hasRootCauseInstanceOf(IllegalStateException.class);
 	}
 }

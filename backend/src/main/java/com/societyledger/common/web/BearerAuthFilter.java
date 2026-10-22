@@ -29,7 +29,8 @@ class BearerAuthFilter extends OncePerRequestFilter {
 	@Override
 	protected boolean shouldNotFilter(HttpServletRequest request) {
 		String path = request.getRequestURI();
-		return !path.startsWith("/api/") || path.startsWith("/api/auth/");
+		// Login is public, and the payment provider's webhook is trusted by its own signature, not a session.
+		return !path.startsWith("/api/") || path.startsWith("/api/auth/") || path.startsWith("/api/gateway/");
 	}
 
 	@Override

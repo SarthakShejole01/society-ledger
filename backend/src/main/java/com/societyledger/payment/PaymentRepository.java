@@ -10,7 +10,11 @@ import org.springframework.stereotype.Repository;
 @Repository
 class PaymentRepository {
 
-	record Row(UUID id, UUID chargeId, UUID flatId, String status, Money amount, String gatewayReference) {
+	record Row(UUID id, UUID chargeId, UUID flatId, String status, Money amount, String gatewayReference,
+			String gatewayOrderId) {
+	}
+
+	record Context(UUID societyId, UUID paymentId) {
 	}
 
 	private final JdbcClient jdbc;
@@ -66,6 +70,21 @@ class PaymentRepository {
 		return id;
 	}
 
+	void setOrderId(UUID paymentId, String orderId) {
+		jdbc.sql("update payments set gateway_order_id = :order where id = :id")
+				.param("order", orderId)
+				.param("id", paymentId)
+				.update();
+	}
+
+	/** Finds the society and payment for a provider order. Works without a society scope, by design. */
+	Optional<Context> contextForOrder(String orderId) {
+		return jdbc.sql("select society_id, payment_id from payment_for_gateway_order(:order)")
+				.param("order", orderId)
+				.query((rs, n) -> new Context(rs.getObject("society_id", UUID.class), rs.getObject("payment_id", UUID.class)))
+				.optional();
+	}
+
 	Optional<Row> findById(UUID paymentId) {
 		return jdbc.sql(rowSql() + " where p.id = :id").param("id", paymentId).query(this::row).optional();
 	}
@@ -87,13 +106,13 @@ class PaymentRepository {
 
 	private String rowSql() {
 		return """
-				select p.id, p.charge_id, c.flat_id, p.status, p.amount_paise, p.gateway_reference
+				select p.id, p.charge_id, c.flat_id, p.status, p.amount_paise, p.gateway_reference, p.gateway_order_id
 				from payments p join charges c on c.id = p.charge_id""";
 	}
 
 	private Row row(java.sql.ResultSet rs, int rowNumber) throws java.sql.SQLException {
 		return new Row(rs.getObject("id", UUID.class), rs.getObject("charge_id", UUID.class),
 				rs.getObject("flat_id", UUID.class), rs.getString("status"),
-				Money.ofPaise(rs.getLong("amount_paise")), rs.getString("gateway_reference"));
+				Money.ofPaise(rs.getLong("amount_paise")), rs.getString("gateway_reference"), rs.getString("gateway_order_id"));
 	}
 }

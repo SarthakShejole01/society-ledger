@@ -5,10 +5,12 @@ import com.societyledger.auth.Role;
 import com.societyledger.common.web.AuthenticatedPrincipal;
 import com.societyledger.common.web.ForbiddenException;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.time.YearMonth;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -28,7 +30,14 @@ class PaymentController {
 	record OfflineResponse(UUID paymentId, long totalPaise, long lateFeePaise, long waivedPaise) {
 	}
 
-	record IntentResponse(UUID paymentId, UUID flatId, String month, long totalPaise, long lateFeePaise) {
+	record IntentResponse(UUID paymentId, UUID flatId, String month, long totalPaise, long lateFeePaise, String currency,
+			String gatewayOrderId, String checkoutKey) {
+	}
+
+	record ConfirmRequest(@NotBlank String gatewayOrderId, @NotBlank String gatewayPaymentId, @NotBlank String signature) {
+	}
+
+	record ConfirmResponse(String status) {
 	}
 
 	private final PaymentService payments;
@@ -61,6 +70,14 @@ class PaymentController {
 		}
 		PaymentIntent intent = payments.start(who.societyId(), request.flatId(), request.month(), who.name());
 		return new IntentResponse(intent.paymentId(), intent.flatId(), intent.month().toString(),
-				intent.total().paise(), intent.lateFee().paise());
+				intent.total().paise(), intent.lateFee().paise(), "INR", intent.gatewayOrderId(), intent.checkoutKey());
+	}
+
+	/** The browser reports a finished payment with the provider's proof. The proof, not the browser, is trusted. */
+	@PostMapping("/api/payments/{paymentId}/confirm")
+	ConfirmResponse confirm(@AuthenticatedPrincipal Principal who, @PathVariable UUID paymentId,
+			@Valid @RequestBody ConfirmRequest request) {
+		payments.confirmCheckout(who.societyId(), paymentId, request.gatewayOrderId(), request.gatewayPaymentId(), request.signature());
+		return new ConfirmResponse("PAID");
 	}
 }
