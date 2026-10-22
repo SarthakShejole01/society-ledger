@@ -19,6 +19,9 @@ class SecretHasher {
 		if (secret.length() < 16) {
 			throw new IllegalStateException("society-ledger.auth.secret must be at least 16 characters");
 		}
+		if (secret.startsWith("change-me")) {
+			throw new IllegalStateException("society-ledger.auth.secret is still the placeholder from .env.example");
+		}
 		this.key = secret.getBytes(StandardCharsets.UTF_8);
 	}
 

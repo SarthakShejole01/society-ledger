@@ -99,5 +99,5 @@ Not checked:
 - **Abandoned payments never expire.** Each attempt leaves a pending record, so someone who starts and walks away leaves clutter.
 - **A committee member who owns a flat can pay only their own flat** (not others), and cannot record payments or waive fees. Change this if the committee wants otherwise.
 - **No admin console.** Societies and people are loaded and changed with SQL.
-- **Security review still to do.** No security headers or content policy are set, only the login code request is rate limited, and there is no account lockout beyond the code limits.
+- **Security.** Browser security headers are set, but no Content-Security-Policy yet (it must be tested with the real Razorpay checkout), and only the login code request is rate limited. See `docs/security.md` for the full list.
 - **Hosting.** Free tiers that sleep or have no backups are fine for trying it, not for real payments. Check each platform's current terms before choosing.
