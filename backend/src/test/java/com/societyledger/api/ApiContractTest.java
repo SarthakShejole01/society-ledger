@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,6 +26,7 @@ import com.societyledger.billing.FlatStatus;
 import com.societyledger.billing.PendingFlat;
 import com.societyledger.billing.StatusBoardService;
 import com.societyledger.common.Money;
+import com.societyledger.export.ExportService;
 import com.societyledger.payment.AlreadyPaidException;
 import com.societyledger.payment.AmountMismatchException;
 import com.societyledger.payment.GatewayPayment;
@@ -78,6 +80,8 @@ class ApiContractTest {
 	private OfflinePaymentService offline;
 	@MockitoBean
 	private DashboardService dashboard;
+	@MockitoBean
+	private ExportService export;
 	@MockitoBean
 	private PaymentGateway gateway;
 
@@ -384,6 +388,40 @@ class ApiContractTest {
 				.andExpect(status().isOk());
 		mvc.perform(get("/api/dashboard").param("month", "2026-10").header("Authorization", "Bearer owner-token"))
 				.andExpect(status().isForbidden());
+	}
+
+	// --- exporting ---
+
+	@Test
+	void the_treasurer_and_committee_download_the_month_as_a_csv_file() throws Exception {
+		given(export.monthCsv(SOCIETY, TREASURER.memberId(), OCTOBER)).willReturn("\uFEFFFlat,Floor\r\n301,3\r\n");
+		given(export.monthCsv(SOCIETY, COMMITTEE.memberId(), OCTOBER)).willReturn("x");
+
+		mvc.perform(get("/api/exports/month.csv").param("month", "2026-10").header("Authorization", "Bearer treasurer-token"))
+				.andExpect(status().isOk())
+				.andExpect(content().contentTypeCompatibleWith("text/csv"))
+				.andExpect(header().string("Content-Disposition", "attachment; filename=\"maintenance-2026-10.csv\""))
+				.andExpect(content().string("\uFEFFFlat,Floor\r\n301,3\r\n"));
+		mvc.perform(get("/api/exports/month.csv").param("month", "2026-10").header("Authorization", "Bearer committee-token"))
+				.andExpect(status().isOk());
+	}
+
+	@Test
+	void owners_cannot_download_the_export() throws Exception {
+		mvc.perform(get("/api/exports/month.csv").param("month", "2026-10").header("Authorization", "Bearer owner-token"))
+				.andExpect(status().isForbidden());
+		verify(export, never()).monthCsv(any(), any(), any());
+	}
+
+	@Test
+	void the_export_needs_a_login() throws Exception {
+		mvc.perform(get("/api/exports/month.csv").param("month", "2026-10")).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void a_bad_month_answers_400() throws Exception {
+		mvc.perform(get("/api/exports/month.csv").param("month", "October").header("Authorization", "Bearer treasurer-token"))
+				.andExpect(status().isBadRequest());
 	}
 
 	// --- paying online ---
