@@ -16,6 +16,7 @@ public class DatabaseTestProperties implements ApplicationContextInitializer<Con
 				"spring.datasource.password", PostgresTestSupport.APP_PASSWORD,
 				"spring.flyway.url", PostgresTestSupport.url(),
 				"spring.flyway.user", PostgresTestSupport.adminUser(),
-				"spring.flyway.password", PostgresTestSupport.adminPassword())));
+				"spring.flyway.password", PostgresTestSupport.adminPassword(),
+				"society-ledger.auth.secret", "test-secret-not-for-production")));
 	}
 }

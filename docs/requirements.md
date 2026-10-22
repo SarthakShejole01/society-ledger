@@ -6,7 +6,7 @@ Let flat owners see the maintenance due and pay it online, let everyone see whic
 
 ## In scope
 
-1. **Owner login** with the registered mobile number (OTP).
+1. **Owner login** with the society code and registered mobile number. The one-time code is emailed to the address on record (see `docs/adr/0002-login-by-emailed-one-time-code.md`).
 2. **Per-flat monthly amount**, set by the treasurer. Amounts can differ per flat.
 3. **Pay page** for the current month. The server works out the exact amount, including any late fee.
 4. **Online payment** through a payment gateway. A flat turns Paid only when the gateway confirms.

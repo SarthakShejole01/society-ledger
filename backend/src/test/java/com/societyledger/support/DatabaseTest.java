@@ -12,7 +12,7 @@ import org.springframework.test.context.ContextConfiguration;
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @SpringBootTest
-@Import(TestClockConfig.class)
+@Import({TestClockConfig.class, TestAuthConfig.class})
 @ContextConfiguration(initializers = DatabaseTestProperties.class)
 public @interface DatabaseTest {
 }
