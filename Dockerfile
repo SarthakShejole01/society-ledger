@@ -14,6 +14,8 @@ RUN npx ng build --configuration production
 # ---- 2. Spring Boot build ---------------------------------------------------
 FROM eclipse-temurin:21-jdk AS backend
 WORKDIR /app/backend
+# Slow connections: give downloads (Gradle itself and the libraries) two minutes instead of ten seconds.
+ENV GRADLE_OPTS="-Dorg.gradle.internal.http.connectionTimeout=120000 -Dorg.gradle.internal.http.socketTimeout=120000"
 COPY backend/gradlew backend/settings.gradle.kts backend/build.gradle.kts ./
 COPY backend/gradle gradle
 # A Windows checkout may have turned the line endings into CRLF, which Linux cannot run.
