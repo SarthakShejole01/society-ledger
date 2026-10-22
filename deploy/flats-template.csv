@@ -1,0 +1,6 @@
+number,floor,monthly_amount_rupees,member_name,member_mobile,member_email,member_role
+101,1,1650,Asha Rao,9876500101,asha@example.com,OWNER
+102,1,1200,Vikram Shah,9876500102,vikram@example.com,OWNER
+103,1,1350,,,,
+201,2,1500,Meena Thomas,9876500201,meena@example.com,TREASURER
+202,2,1500,Anil Chopra,9876500202,anil@example.com,COMMITTEE
