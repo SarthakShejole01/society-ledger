@@ -16,12 +16,14 @@ FROM eclipse-temurin:21-jdk AS backend
 WORKDIR /app/backend
 COPY backend/gradlew backend/settings.gradle.kts backend/build.gradle.kts ./
 COPY backend/gradle gradle
-RUN ./gradlew --no-daemon --console=plain dependencies > /dev/null
+# A Windows checkout may have turned the line endings into CRLF, which Linux cannot run.
+RUN sed -i "s/\r$//" gradlew && chmod +x gradlew && ./gradlew --no-daemon --console=plain dependencies > /dev/null
 COPY backend/src src
 # The web app is served by Spring Boot from classpath:/static.
 COPY --from=frontend /app/frontend/dist/frontend/browser src/main/resources/static
 # Tests run in CI (they need Docker for Testcontainers); the image build only packages.
-RUN ./gradlew --no-daemon --console=plain bootJar -x test
+# A Windows checkout may have turned the line endings into CRLF, which Linux cannot run.
+RUN sed -i "s/\r$//" gradlew && chmod +x gradlew && ./gradlew --no-daemon --console=plain bootJar -x test
 
 # ---- 3. Runtime -------------------------------------------------------------
 FROM eclipse-temurin:21-jre-alpine

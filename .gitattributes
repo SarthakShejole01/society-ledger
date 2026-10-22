@@ -1,0 +1,6 @@
+# Shell scripts and the Gradle wrapper run on Linux (inside Docker), so they must keep LF line endings
+# even when checked out on Windows.
+*.sh text eol=lf
+backend/gradlew text eol=lf
+*.sql text eol=lf
+*.csv text eol=lf
