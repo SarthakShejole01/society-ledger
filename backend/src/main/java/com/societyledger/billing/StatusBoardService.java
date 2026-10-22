@@ -22,7 +22,7 @@ public class StatusBoardService {
 
 	public List<FlatStatus> forMonth(UUID societyId, YearMonth month) {
 		return scope.inSociety(societyId, () -> jdbc.sql("""
-				select f.number, f.floor,
+				select f.id, f.number, f.floor,
 					exists (
 						select 1 from charges c
 						join payments p on p.charge_id = c.id and p.status = 'CONFIRMED'
@@ -30,7 +30,7 @@ public class StatusBoardService {
 				from flats f
 				order by f.floor, f.number""")
 				.param("month", Date.valueOf(month.atDay(1)))
-				.query((rs, row) -> new FlatStatus(rs.getString("number"), rs.getInt("floor"), rs.getBoolean("paid")))
+				.query((rs, row) -> new FlatStatus(rs.getObject("id", UUID.class), rs.getString("number"), rs.getInt("floor"), rs.getBoolean("paid")))
 				.list());
 	}
 }

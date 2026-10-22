@@ -199,10 +199,11 @@ class ApiContractTest {
 
 	@Test
 	void any_member_sees_the_status_board_without_amounts() throws Exception {
-		given(board.forMonth(SOCIETY, OCTOBER)).willReturn(List.of(new FlatStatus("304", 3, true), new FlatStatus("305", 3, false)));
+		given(board.forMonth(SOCIETY, OCTOBER)).willReturn(List.of(new FlatStatus(OWN_FLAT, "304", 3, true), new FlatStatus(OTHER_FLAT, "305", 3, false)));
 
 		mvc.perform(get("/api/flats/status").param("month", "2026-10").header("Authorization", "Bearer owner-token"))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].flatId").value(OWN_FLAT.toString()))
 				.andExpect(jsonPath("$[0].number").value("304"))
 				.andExpect(jsonPath("$[0].paid").value(true))
 				.andExpect(jsonPath("$[1].paid").value(false))

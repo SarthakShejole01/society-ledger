@@ -92,6 +92,13 @@ class PaymentServiceTest {
 	}
 
 	@Test
+	void the_board_includes_each_flats_id_so_another_flat_can_be_paid() {
+		List<FlatStatus> statuses = board.forMonth(SUNRISE, OCTOBER);
+
+		assertThat(statuses).extracting(FlatStatus::flatId).containsExactly(flat304.id(), flat305.id());
+	}
+
+	@Test
 	void an_unconfirmed_payment_leaves_the_flat_pending() {
 		payments.start(SUNRISE, flat304.id(), OCTOBER, "Rajesh K");
 
