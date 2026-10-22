@@ -37,16 +37,16 @@ describe('Shell', () => {
     expect(links()).toEqual(['Home', 'Flats']);
   });
 
-  it('gives the treasurer only the screens that exist so far', async () => {
+  it('gives the treasurer the dashboard, recording and the flats', async () => {
     await openAs('TREASURER', 'Meena T');
 
-    expect(links()).toEqual(['Flats']);
+    expect(links()).toEqual(['Dashboard', 'Record', 'Flats']);
   });
 
-  it('gives the committee only the screens that exist so far', async () => {
+  it('gives the committee the dashboard and the flats', async () => {
     await openAs('COMMITTEE', 'Anil C');
 
-    expect(links()).toEqual(['Flats']);
+    expect(links()).toEqual(['Dashboard', 'Flats']);
   });
 
   it('shows who is logged in', async () => {

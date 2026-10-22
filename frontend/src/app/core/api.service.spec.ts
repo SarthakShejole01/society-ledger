@@ -39,4 +39,25 @@ describe('ApiService', () => {
     expect(req.request.body).toEqual({ flatId: 'flat-1', month: '2026-10' });
     req.flush({ paymentId: 'p1', flatId: 'flat-1', month: '2026-10', totalPaise: 160000, lateFeePaise: 10000 });
   });
+
+  it('gets the dashboard for a month', () => {
+    api.dashboard('2026-10').subscribe();
+
+    const req = http.expectOne((r) => r.url === '/api/dashboard');
+    expect(req.request.params.get('month')).toBe('2026-10');
+    req.flush({});
+  });
+
+  it('records an offline payment without ever sending an amount', () => {
+    api.recordOffline({ flatId: 'f1', month: '2026-10', method: 'CHEQUE', reference: '000123', waiveLateFee: true, waiverReason: 'In hospital' })
+      .subscribe();
+
+    const req = http.expectOne('/api/payments/offline');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      flatId: 'f1', month: '2026-10', method: 'CHEQUE', reference: '000123', waiveLateFee: true, waiverReason: 'In hospital',
+    });
+    expect(Object.keys(req.request.body as object).some((k) => k.toLowerCase().includes('amount'))).toBe(false);
+    req.flush({ paymentId: 'p1', totalPaise: 150000, lateFeePaise: 0, waivedPaise: 10000 });
+  });
 });

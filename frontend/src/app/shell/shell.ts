@@ -46,11 +46,16 @@ export class Shell {
   private readonly router = inject(Router);
 
   protected readonly name = computed(() => this.auth.session()?.name ?? '');
-  protected readonly links = computed<NavLink[]>(() =>
-    this.auth.role() === 'OWNER'
-      ? [{ path: '/home', label: 'Home' }, { path: '/flats', label: 'Flats' }]
-      : [{ path: '/flats', label: 'Flats' }],
-  );
+  protected readonly links = computed<NavLink[]>(() => {
+    switch (this.auth.role()) {
+      case 'OWNER':
+        return [{ path: '/home', label: 'Home' }, { path: '/flats', label: 'Flats' }];
+      case 'TREASURER':
+        return [{ path: '/dashboard', label: 'Dashboard' }, { path: '/record', label: 'Record' }, { path: '/flats', label: 'Flats' }];
+      default:
+        return [{ path: '/dashboard', label: 'Dashboard' }, { path: '/flats', label: 'Flats' }];
+    }
+  });
 
   protected logOut(): void {
     this.auth.logout();

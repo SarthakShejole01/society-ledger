@@ -38,3 +38,45 @@ export interface PaymentIntent {
   totalPaise: number;
   lateFeePaise: number;
 }
+
+/** A flat that has not paid. `dueNowPaise` includes any late fee that applies today. */
+export interface PendingFlat {
+  flatId: string;
+  number: string;
+  floor: number;
+  amountPaise: number;
+  dueNowPaise: number;
+}
+
+export interface MonthDashboard {
+  month: string;
+  flatCount: number;
+  paidCount: number;
+  pendingCount: number;
+  expectedPaise: number;
+  collectedPaise: number;
+  onlineCollectedPaise: number;
+  offlineCollectedPaise: number;
+  lateFeesCollectedPaise: number;
+  lateFeesWaivedPaise: number;
+  pending: PendingFlat[];
+}
+
+export type OfflineMethod = 'CASH' | 'CHEQUE';
+
+/** There is no amount here on purpose: the server works out what is owed. */
+export interface OfflinePaymentRequest {
+  flatId: string;
+  month: string;
+  method: OfflineMethod;
+  reference: string | null;
+  waiveLateFee: boolean;
+  waiverReason: string | null;
+}
+
+export interface OfflinePaymentResult {
+  paymentId: string;
+  totalPaise: number;
+  lateFeePaise: number;
+  waivedPaise: number;
+}
