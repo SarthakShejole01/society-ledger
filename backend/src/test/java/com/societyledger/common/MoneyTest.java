@@ -38,4 +38,10 @@ class MoneyTest {
 		assertThatThrownBy(() -> Money.rupees(1500).times(-1))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
+
+	@Test
+	void formats_as_rupees_and_paise_for_messages() {
+		assertThat(Money.ofPaise(160_050).formatted()).isEqualTo("Rs 1600.50");
+		assertThat(Money.ZERO.formatted()).isEqualTo("Rs 0.00");
+	}
 }

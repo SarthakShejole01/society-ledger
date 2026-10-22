@@ -31,4 +31,9 @@ public record Money(long paise) {
 		}
 		return new Money(Math.multiplyExact(paise, (long) multiplier));
 	}
+
+	/** For messages and logs, for example "Rs 1600.50". Not for calculation. */
+	public String formatted() {
+		return "Rs %d.%02d".formatted(paise / 100, paise % 100);
+	}
 }
