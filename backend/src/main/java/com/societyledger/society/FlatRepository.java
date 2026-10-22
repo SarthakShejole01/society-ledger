@@ -2,6 +2,7 @@ package com.societyledger.society;
 
 import com.societyledger.common.Money;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -41,5 +42,13 @@ public class FlatRepository {
 						rs.getInt("floor"),
 						Money.ofPaise(rs.getLong("monthly_amount_paise"))))
 				.list();
+	}
+
+	/** The number of a flat visible to the current scope. */
+	public Optional<String> findNumber(UUID flatId) {
+		return jdbc.sql("select number from flats where id = :id")
+				.param("id", flatId)
+				.query(String.class)
+				.optional();
 	}
 }

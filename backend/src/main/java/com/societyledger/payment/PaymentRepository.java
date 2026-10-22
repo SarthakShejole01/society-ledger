@@ -42,6 +42,30 @@ class PaymentRepository {
 		return id;
 	}
 
+	UUID insertOffline(UUID societyId, UUID chargeId, String payerName, Money total, Money lateFee, Money waived,
+			String waiverReason, OfflineMethod method, String referenceNote, UUID recordedBy, Instant at) {
+		UUID id = UUID.randomUUID();
+		jdbc.sql("""
+				insert into payments (id, society_id, charge_id, payer_name, status, channel, amount_paise, late_fee_paise,
+					waived_late_fee_paise, waiver_reason, method, reference_note, recorded_by, started_at, confirmed_at)
+				values (:id, :societyId, :chargeId, :payer, 'CONFIRMED', 'OFFLINE', :total, :lateFee,
+					:waived, :waiverReason, :method, :note, :recordedBy, :at, :at)""")
+				.param("id", id)
+				.param("societyId", societyId)
+				.param("chargeId", chargeId)
+				.param("payer", payerName)
+				.param("total", total.paise())
+				.param("lateFee", lateFee.paise())
+				.param("waived", waived.paise())
+				.param("waiverReason", waiverReason)
+				.param("method", method.name())
+				.param("note", referenceNote)
+				.param("recordedBy", recordedBy)
+				.param("at", java.sql.Timestamp.from(at))
+				.update();
+		return id;
+	}
+
 	Optional<Row> findById(UUID paymentId) {
 		return jdbc.sql(rowSql() + " where p.id = :id").param("id", paymentId).query(this::row).optional();
 	}
