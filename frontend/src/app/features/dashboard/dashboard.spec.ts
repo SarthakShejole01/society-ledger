@@ -11,7 +11,7 @@ import { MonthDashboard, Role } from '../../core/models';
 import { DashboardPage } from './dashboard';
 
 describe('DashboardPage', () => {
-  const api = { dashboard: vi.fn() };
+  const api = { dashboard: vi.fn(), exportMonth: vi.fn() };
   let fixture: ComponentFixture<DashboardPage>;
   let page: HTMLElement;
 
@@ -127,6 +127,55 @@ describe('DashboardPage', () => {
     expect(Array.from(page.querySelectorAll('a')).some((a) => a.textContent?.includes('Record'))).toBe(false);
     expect(page.textContent).toContain('View only');
     expect(page.textContent).toContain('Flat 302');
+  });
+
+  describe('downloading the month as a spreadsheet', () => {
+    let click: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      URL.createObjectURL = vi.fn(() => 'blob:csv');
+      URL.revokeObjectURL = vi.fn();
+      click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    });
+
+    afterEach(() => click.mockRestore());
+
+    const button = () => Array.from(page.querySelectorAll('button')).find((b) => b.textContent?.includes('Download CSV'));
+
+    it('is offered to the treasurer and the committee', async () => {
+      api.dashboard.mockReturnValue(of(data));
+
+      await openAs('COMMITTEE');
+
+      expect(button()).toBeTruthy();
+    });
+
+    it('asks the server for this month and saves the file', async () => {
+      api.dashboard.mockReturnValue(of(data));
+      api.exportMonth.mockReturnValue(of(new Blob(['x'])));
+      await openAs('TREASURER');
+
+      button()?.click();
+      fixture.detectChanges();
+
+      expect(api.exportMonth).toHaveBeenCalledWith('2026-10');
+      expect(URL.createObjectURL).toHaveBeenCalled();
+      expect(click).toHaveBeenCalled();
+      expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:csv');
+    });
+
+    it('says so when the download fails and lets them try again', async () => {
+      api.dashboard.mockReturnValue(of(data));
+      api.exportMonth.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await openAs('TREASURER');
+
+      button()?.click();
+      fixture.detectChanges();
+
+      expect(page.textContent).toContain('could not download');
+      expect(click).not.toHaveBeenCalled();
+      expect(button()?.disabled).toBe(false);
+    });
   });
 
   it('says so when every flat has paid', async () => {

@@ -73,6 +73,15 @@ import { monthLabel, monthOf } from '../../core/month';
               <p class="muted small">View only. Recording payments is for the treasurer.</p>
             }
           </section>
+
+          <section class="card">
+            <h2>Records</h2>
+            <p class="muted small">Every flat for {{ monthName }}, with who paid, how and when. Opens in Excel or Sheets.</p>
+            <button class="btn" type="button" [disabled]="downloading()" (click)="download()">Download CSV</button>
+            @if (downloadFailed()) {
+              <p role="alert">We could not download the file. Please try again.</p>
+            }
+          </section>
         }
       }
     }
@@ -97,6 +106,8 @@ export class DashboardPage {
 
   protected readonly month = monthOf(inject(NOW)());
   protected readonly monthName = monthLabel(this.month);
+  protected readonly downloading = signal(false);
+  protected readonly downloadFailed = signal(false);
   protected readonly state = signal<LoadState<MonthDashboard>>({ status: 'loading' });
   protected readonly money = formatRupees;
   protected readonly isTreasurer = computed(() => this.auth.role() === 'TREASURER');
@@ -121,5 +132,29 @@ export class DashboardPage {
       next: (data) => this.state.set({ status: 'ready', data }),
       error: () => this.state.set({ status: 'error' }),
     });
+  }
+
+  protected download(): void {
+    this.downloading.set(true);
+    this.downloadFailed.set(false);
+    this.api.exportMonth(this.month).subscribe({
+      next: (file) => {
+        this.save(file);
+        this.downloading.set(false);
+      },
+      error: () => {
+        this.downloadFailed.set(true);
+        this.downloading.set(false);
+      },
+    });
+  }
+
+  private save(file: Blob): void {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `maintenance-${this.month}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 }

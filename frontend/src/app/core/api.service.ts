@@ -34,4 +34,9 @@ export class ApiService {
   recordOffline(request: OfflinePaymentRequest): Observable<OfflinePaymentResult> {
     return this.http.post<OfflinePaymentResult>('/api/payments/offline', request);
   }
+
+  /** The month's collection as a CSV file. Fetched with the login attached, so it cannot be a plain link. */
+  exportMonth(month: string): Observable<Blob> {
+    return this.http.get('/api/exports/month.csv', { params: new HttpParams().set('month', month), responseType: 'blob' });
+  }
 }
