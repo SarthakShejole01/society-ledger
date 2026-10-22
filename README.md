@@ -84,7 +84,7 @@ install bug seen with npm 10.
 | `POST /api/auth/otp` | anyone, always answers 202 |
 | `POST /api/auth/verify` | anyone, returns a session token |
 | `GET /api/flats/{flatId}/dues?month=2026-10` | an owner for their own flat; treasurer and committee for any flat |
-| `GET /api/flats/status?month=2026-10` | every member, status only |
+| `GET /api/flats/status?month=2026-10` | every member, status only (flat id, number, floor, paid), never amounts |
 | `POST /api/payments` | owner or treasurer, for any flat; the server sets the amount |
 | `POST /api/payments/offline` | treasurer only: record cash or cheque, optionally waiving the late fee with a reason |
 | `GET /api/dashboard?month=2026-10` | treasurer and committee: counts, expected and collected, online against offline, late fees, pending flats |

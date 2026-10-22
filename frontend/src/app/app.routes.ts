@@ -13,6 +13,7 @@ export const routes: Routes = [
     children: [
       { path: '', pathMatch: 'full', redirectTo: () => (inject(AuthService).role() === 'OWNER' ? 'home' : 'dashboard') },
       { path: 'home', canActivate: [roleGuard('OWNER')], loadComponent: () => import('./features/owner/owner-home').then((m) => m.OwnerHome) },
+      { path: 'pay-for', canActivate: [roleGuard('OWNER')], loadComponent: () => import('./features/owner/pay-for-another').then((m) => m.PayForAnother) },
       { path: 'dashboard', canActivate: [roleGuard('TREASURER', 'COMMITTEE')], loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.DashboardPage) },
       { path: 'record', canActivate: [roleGuard('TREASURER')], loadComponent: () => import('./features/record/record').then((m) => m.RecordPage) },
       { path: 'flats', loadComponent: () => import('./features/board/board').then((m) => m.Board) },

@@ -1,6 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { NEVER, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 import { ApiService } from '../../core/api.service';
@@ -24,6 +25,7 @@ describe('OwnerHome', () => {
     await TestBed.configureTestingModule({
       imports: [OwnerHome],
       providers: [
+        provideRouter([]),
         { provide: ApiService, useValue: api },
         { provide: AuthService, useValue: { session } },
         { provide: NOW, useValue: () => new Date(now) },
@@ -148,5 +150,22 @@ describe('OwnerHome', () => {
 
     expect(page.textContent).toContain('not linked to a flat');
     expect(api.dues).not.toHaveBeenCalled();
+  });
+
+  it('offers to pay for another flat', async () => {
+    api.dues.mockReturnValue(of(unpaid));
+
+    await open();
+
+    const link = Array.from(page.querySelectorAll('a')).find((a) => a.textContent?.includes('Pay for another flat'));
+    expect(link?.getAttribute('href')).toBe('/pay-for');
+  });
+
+  it('offers to pay for another flat even when this flat has paid', async () => {
+    api.dues.mockReturnValue(of(paid));
+
+    await open();
+
+    expect(Array.from(page.querySelectorAll('a')).some((a) => a.textContent?.includes('Pay for another flat'))).toBe(true);
   });
 });

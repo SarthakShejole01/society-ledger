@@ -26,6 +26,7 @@ export interface Dues {
 }
 
 export interface FlatStatus {
+  flatId: string;
   number: string;
   floor: number;
   paid: boolean;

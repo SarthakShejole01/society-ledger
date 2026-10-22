@@ -13,9 +13,9 @@ describe('Board', () => {
   let page: HTMLElement;
 
   const flats: FlatStatus[] = [
-    { number: '101', floor: 1, paid: true },
-    { number: '102', floor: 1, paid: false },
-    { number: '201', floor: 2, paid: true },
+    { flatId: 'f101', number: '101', floor: 1, paid: true },
+    { flatId: 'f102', number: '102', floor: 1, paid: false },
+    { flatId: 'f201', number: '201', floor: 2, paid: true },
   ];
 
   async function open(): Promise<void> {

@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/api.service';
 import { AuthService } from '../../core/auth.service';
 import { NOW } from '../../core/clock';
@@ -12,6 +13,7 @@ type Payment = { status: 'idle' } | { status: 'starting' } | { status: 'started'
 
 @Component({
   selector: 'app-owner-home',
+  imports: [RouterLink],
   template: `
     @switch (state().status) {
       @case ('loading') {
@@ -72,6 +74,8 @@ type Payment = { status: 'idle' } | { status: 'starting' } | { status: 'started'
               }
             }
           }
+
+          <a class="btn ghost" routerLink="/pay-for">Pay for another flat</a>
         }
       }
     }
@@ -79,6 +83,7 @@ type Payment = { status: 'idle' } | { status: 'starting' } | { status: 'started'
   styles: `
     :host { display: flex; flex-direction: column; gap: 1rem; }
     h2 { margin: 0 0 0.25rem; font-size: 1rem; }
+    a.btn { display: block; text-align: center; text-decoration: none; }
   `,
 })
 export class OwnerHome {
