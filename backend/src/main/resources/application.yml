@@ -6,6 +6,8 @@ society-ledger:
     enabled: false
 
 spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
   mail:
     properties:
       # Encrypted, authenticated and never left waiting for a slow server.
@@ -22,3 +24,13 @@ management:
     # Logins degrade (codes are delayed) but payments, dashboards and the board keep working.
     mail:
       enabled: false
+
+server:
+  # Hosting platforms hand the port in PORT; SERVER_PORT still overrides.
+  port: ${PORT:8080}
+  shutdown: graceful
+  # The platform's proxy terminates TLS, so trust its forwarded headers.
+  forward-headers-strategy: framework
+  compression:
+    enabled: true
+    mime-types: text/html,text/css,application/javascript,application/json,image/svg+xml
