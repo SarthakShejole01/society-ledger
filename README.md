@@ -7,6 +7,7 @@ Status: early development (version 1 for the first society). See `docs/requireme
 ## Layout
 
 - `backend/` Java 21, Spring Boot, PostgreSQL
+- `frontend/` Angular web app for phones and desktops
 - `docs/` requirements and decisions
 
 ## Run the backend tests
@@ -45,6 +46,18 @@ cd backend && ./gradlew bootRun
 
 The `dev` profile logs one-time codes instead of emailing them. Never enable it for real members.
 Create the `ledger_app` role (login, no table ownership) before the first start.
+
+## Run the frontend
+
+```
+cd frontend
+npm install --legacy-peer-deps
+npx ng serve        # http://localhost:4200, forwards /api to the backend on port 8080
+npx ng test --watch=false
+```
+
+Angular 21 (standalone components, signals), tests on Vitest. `--legacy-peer-deps` works around an npm
+install bug seen with npm 10.
 
 ## API (version 1)
 
